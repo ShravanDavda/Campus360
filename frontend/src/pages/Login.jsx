@@ -15,6 +15,13 @@ export default function Login() {
     password: '',
   });
 
+  React.useEffect(() => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
+
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -85,7 +92,7 @@ export default function Login() {
         if (response.data.data.user) {
           localStorage.setItem('user', JSON.stringify(response.data.data.user));
         }
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
       } else {
         setFormError('Login failed. Please verify your credentials.');
       }

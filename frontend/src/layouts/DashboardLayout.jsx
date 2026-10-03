@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate, Navigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import {
   ShieldCheck,
   LayoutDashboard,
@@ -15,6 +15,9 @@ import {
   LogOut,
   Menu,
   X,
+  HeartHandshake,
+  CheckSquare,
+  UserCheck,
 } from 'lucide-react';
 
 const MEMBER_NAV_ITEMS = [
@@ -27,11 +30,6 @@ const MEMBER_NAV_ITEMS = [
   { name: 'My Orders', path: '/orders', icon: Package },
   { name: 'Announcements', path: '/announcements', icon: Megaphone },
   { name: 'Payments', path: '/payments', icon: Receipt },
-];
-
-const ADMIN_NAV_ITEMS = [
-  { name: 'Admin Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Admin Members', path: '/admin/members', icon: Users },
 ];
 
 const getUserRole = () => {
@@ -58,6 +56,7 @@ const getUserRole = () => {
 export default function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (!token) {
@@ -65,13 +64,52 @@ export default function DashboardLayout() {
   }
 
   const userRole = getUserRole();
-  const navItems = userRole === 'admin' ? ADMIN_NAV_ITEMS : MEMBER_NAV_ITEMS;
+  const navItems = userRole === 'admin'
+    ? [
+        { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+        { name: 'Admin Members', path: '/admin/members', icon: Users },
+        { name: 'Admin Events', path: '/admin/events', icon: Calendar },
+        { name: 'Admin Merchandise', path: '/admin/merchandise', icon: ShoppingBag },
+        { name: 'Admin Fundraisers', path: '/admin/fundraisers', icon: HeartHandshake },
+        { name: 'Admin Tasks', path: '/admin/tasks', icon: CheckSquare },
+        { name: 'Admin Volunteers', path: '/admin/volunteers', icon: UserCheck },
+        { name: 'Admin Finance', path: '/admin/finance', icon: Receipt },
+        { name: 'Admin Announcements', path: '/admin/announcements', icon: Megaphone },
+        ...MEMBER_NAV_ITEMS.filter((i) => i.path !== '/dashboard' && i.path !== '/events' && i.path !== '/merchandise' && i.path !== '/payments' && i.path !== '/announcements'),
+      ]
+    : userRole === 'eventOrganizer'
+    ? [
+        { name: 'Organizer Dashboard', path: '/organizer/dashboard', icon: LayoutDashboard },
+        ...MEMBER_NAV_ITEMS,
+      ]
+    : userRole === 'volunteer'
+    ? [
+        { name: 'Volunteer Dashboard', path: '/volunteer/dashboard', icon: LayoutDashboard },
+        ...MEMBER_NAV_ITEMS,
+      ]
+    : userRole === 'treasurer'
+    ? [
+        { name: 'Treasurer Dashboard', path: '/treasurer/dashboard', icon: LayoutDashboard },
+        ...MEMBER_NAV_ITEMS,
+      ]
+    : MEMBER_NAV_ITEMS;
+
+  React.useEffect(() => {
+    const handlePageShow = () => {
+      const currentToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!currentToken) {
+        navigate('/login', { replace: true });
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     localStorage.removeItem('user');
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -123,13 +161,14 @@ export default function DashboardLayout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${
-                      isActive
+                  className={({ isActive }) => {
+                    const active = isActive || (item.path === '/admin/dashboard' && location.pathname === '/dashboard');
+                    return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${
+                      active
                         ? 'bg-[#714B67] text-white shadow-sm'
                         : 'text-gray-700 hover:bg-[#714B67]/10 hover:text-[#714B67]'
-                    }`
-                  }
+                    }`;
+                  }}
                 >
                   <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span>{item.name}</span>
@@ -169,13 +208,14 @@ export default function DashboardLayout() {
                       key={item.path}
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${
-                          isActive
+                      className={({ isActive }) => {
+                        const active = isActive || (item.path === '/admin/dashboard' && location.pathname === '/dashboard');
+                        return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${
+                          active
                             ? 'bg-[#714B67] text-white shadow-sm'
                             : 'text-gray-700 hover:bg-[#714B67]/10 hover:text-[#714B67]'
-                        }`
-                      }
+                        }`;
+                      }}
                     >
                       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                       <span>{item.name}</span>

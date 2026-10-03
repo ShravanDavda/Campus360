@@ -6,15 +6,15 @@ export function Badge({ children, variant, className }) {
 
   let styles = "bg-gray-100 text-gray-700 border-gray-200";
 
-  if (variant === 'purple' || normalized === 'PLACED' || normalized === 'MEMBERSHIP_DUES') {
+  if (variant === 'purple' || normalized === 'PLACED' || normalized === 'MEMBERSHIP_DUES' || normalized === 'IN_PROGRESS' || normalized === 'ASSIGNED') {
     styles = "bg-[#714B67]/10 text-[#714B67] border-[#714B67]/25";
-  } else if (variant === 'teal' || normalized === 'ACTIVE' || normalized === 'PAID' || normalized === 'PUBLISHED' || normalized === 'CHECKED_IN' || normalized === 'EVENT_TICKET' || normalized === 'AVAILABLE') {
+  } else if (variant === 'teal' || normalized === 'ACTIVE' || normalized === 'PAID' || normalized === 'PUBLISHED' || normalized === 'CHECKED_IN' || normalized === 'EVENT_TICKET' || normalized === 'AVAILABLE' || normalized === 'COMPLETED' || normalized === 'DONE') {
     styles = "bg-[#017E84]/10 text-[#017E84] border-[#017E84]/25";
-  } else if (variant === 'gold' || normalized === 'PENDING' || normalized === 'MERCHANDISE_ORDER' || normalized === 'LOW_STOCK') {
+  } else if (variant === 'gold' || normalized === 'PENDING' || normalized === 'TODO' || normalized === 'HIGH' || normalized === 'MERCHANDISE_ORDER' || normalized === 'LOW_STOCK' || normalized === 'NEARLY_FULL' || normalized === 'DRAFT') {
     styles = "bg-[#E4A900]/15 text-[#8a6500] border-[#E4A900]/30";
-  } else if (variant === 'danger' || normalized === 'CANCELLED' || normalized === 'FAILED' || normalized === 'OUT_OF_STOCK') {
+  } else if (variant === 'danger' || normalized === 'CANCELLED' || normalized === 'FAILED' || normalized === 'OUT_OF_STOCK' || normalized === 'SOLD_OUT' || normalized === 'URGENT') {
     styles = "bg-red-50 text-red-700 border-red-200";
-  } else if (variant === 'gray' || normalized === 'EXPIRED' || normalized === 'NOT_CHECKED_IN') {
+  } else if (variant === 'gray' || normalized === 'EXPIRED' || normalized === 'NOT_CHECKED_IN' || normalized === 'CLOSED' || normalized === 'LOW' || normalized === 'MEDIUM' || normalized === 'UNASSIGNED' || normalized === 'INACTIVE') {
     styles = "bg-gray-100 text-gray-600 border-gray-200";
   }
 
