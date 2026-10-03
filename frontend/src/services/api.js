@@ -83,4 +83,25 @@ export const memberService = {
   getPayments: () => api.get('/member/payments'),
 };
 
+// Admin Service - Locked Contract
+export const adminService = {
+  // 1. List Members (optional query params: page, limit, status, role, search)
+  getAdminMembers: (params = {}) => {
+    const cleanParams = {};
+    if (params.page !== undefined && params.page !== null) cleanParams.page = params.page;
+    if (params.limit !== undefined && params.limit !== null) cleanParams.limit = params.limit;
+    if (params.status && params.status !== 'all') cleanParams.status = params.status;
+    if (params.role && params.role !== 'all') cleanParams.role = params.role;
+    if (params.search && params.search.trim()) cleanParams.search = params.search.trim();
+    return api.get('/admin/members', { params: cleanParams });
+  },
+
+  // 2. View Member Details
+  getAdminMember: (userId) => api.get(`/admin/members/${userId}`),
+
+  // 3. Activate Pending Member
+  updateAdminMemberStatus: (userId, data) => api.patch(`/admin/members/${userId}/status`, data),
+};
+
 export default api;
+

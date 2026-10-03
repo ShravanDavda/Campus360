@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, MapPin, Users, Ticket, ArrowRight } from 'lucide-react';
+import { Calendar, MapPin, Users, Ticket, ArrowRight, BadgeCent } from 'lucide-react';
 import { memberService } from '../services/api';
 import { Badge } from '../components/ui/Badge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -49,10 +49,10 @@ export default function EventsList() {
           <h1 className="text-2xl font-bold text-[#000000]">Upcoming Events</h1>
           <p className="text-sm text-[#555555] mt-1">
             Browse and register for upcoming organization programs and activities.
+
           </p>
         </div>
       </div>
-
       {error && <Alert variant="error">{error}</Alert>}
 
       {events.length === 0 ? (

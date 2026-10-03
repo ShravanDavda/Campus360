@@ -25,6 +25,10 @@ import AnnouncementsList from './pages/AnnouncementsList';
 import AnnouncementDetails from './pages/AnnouncementDetails';
 import PaymentHistory from './pages/PaymentHistory';
 
+// Admin Pages
+import AdminMembers from './pages/AdminMembers';
+import AdminMemberDetails from './pages/AdminMemberDetails';
+
 function App() {
   return (
     <BrowserRouter>
@@ -52,6 +56,10 @@ function App() {
           <Route path="/announcements" element={<AnnouncementsList />} />
           <Route path="/announcements/:announcementId" element={<AnnouncementDetails />} />
           <Route path="/payments" element={<PaymentHistory />} />
+
+          {/* Admin Member Management Routes */}
+          <Route path="/admin/members" element={<AdminMembers />} />
+          <Route path="/admin/members/:userId" element={<AdminMemberDetails />} />
         </Route>
 
         {/* Redirects */}

@@ -11,12 +11,13 @@ import {
   Package,
   Megaphone,
   Receipt,
+  Users,
   LogOut,
   Menu,
   X,
 } from 'lucide-react';
 
-const NAV_ITEMS = [
+const MEMBER_NAV_ITEMS = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Profile', path: '/profile', icon: User },
   { name: 'Membership', path: '/membership', icon: CreditCard },
@@ -28,6 +29,32 @@ const NAV_ITEMS = [
   { name: 'Payments', path: '/payments', icon: Receipt },
 ];
 
+const ADMIN_NAV_ITEMS = [
+  { name: 'Admin Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { name: 'Admin Members', path: '/admin/members', icon: Users },
+];
+
+const getUserRole = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const parsed = JSON.parse(userStr);
+      if (parsed?.role) return parsed.role;
+    }
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      const payloadBase64 = token.split('.')[1];
+      if (payloadBase64) {
+        const decoded = JSON.parse(atob(payloadBase64));
+        if (decoded?.role) return decoded.role;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return null;
+};
+
 export default function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -37,9 +64,13 @@ export default function DashboardLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  const userRole = getUserRole();
+  const navItems = userRole === 'admin' ? ADMIN_NAV_ITEMS : MEMBER_NAV_ITEMS;
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
+    localStorage.removeItem('user');
     navigate('/login');
   };
 
@@ -86,7 +117,7 @@ export default function DashboardLayout() {
         {/* Desktop Sidebar Navigation */}
         <aside className="hidden lg:block w-60 shrink-0">
           <nav className="sticky top-24 bg-white border border-[#e2e5e9] rounded-lg p-2 space-y-1 shadow-sm">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
@@ -131,7 +162,7 @@ export default function DashboardLayout() {
                 </button>
               </div>
               <nav className="flex-1 space-y-1">
-                {NAV_ITEMS.map((item) => {
+                {navItems.map((item) => {
                   const Icon = item.icon;
                   return (
                     <NavLink
