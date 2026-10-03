@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, Navigate } from 'react-router-dom';
 import {
   ShieldCheck,
   LayoutDashboard,
@@ -32,6 +32,11 @@ export default function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
 
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
@@ -58,7 +63,7 @@ export default function DashboardLayout() {
                 <span>CAMPUS360</span>
               </div>
               <span className="hidden sm:inline-block text-sm font-semibold text-[#000000]">
-                Skyline Student Association
+                LDCE Student Association
               </span>
             </div>
           </div>
@@ -160,7 +165,7 @@ export default function DashboardLayout() {
       {/* Footer */}
       <footer className="bg-white border-t border-[#e2e5e9] py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-[#8F8F8F]">
-          <p>Odoo × LDCE Hackathon 2026 — Skyline Student Association</p>
+          <p>Odoo × LDCE Hackathon 2026 — LDCE Student Association</p>
         </div>
       </footer>
     </div>

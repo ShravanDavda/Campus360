@@ -48,7 +48,7 @@ export default function Membership() {
               Membership Overview
             </h1>
             <p className="text-xs sm:text-sm text-[#666666] mt-1">
-              Official membership standing with Skyline Student Association.
+              Official membership standing with LDCE Student Association.
             </p>
           </div>
           {membership?.status && <Badge>{membership.status}</Badge>}

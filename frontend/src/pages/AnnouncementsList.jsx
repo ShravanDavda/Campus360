@@ -45,7 +45,7 @@ export default function AnnouncementsList() {
       <div>
         <h1 className="text-2xl font-bold text-[#000000]">Announcements</h1>
         <p className="text-sm text-[#555555] mt-1">
-          Official news, updates, and notices from Skyline Student Association leadership.
+          Official news, updates, and notices from LDCE Student Association leadership.
         </p>
       </div>
 

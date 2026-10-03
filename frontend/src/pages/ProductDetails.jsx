@@ -185,7 +185,7 @@ export default function ProductDetails() {
                   Description
                 </h4>
                 <p className="text-xs sm:text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                  {product.description || 'Official Skyline Student Association apparel.'}
+                  {product.description || 'Official LDCE Student Association apparel.'}
                 </p>
               </div>
             </div>

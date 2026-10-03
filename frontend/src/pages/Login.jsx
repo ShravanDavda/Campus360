@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ShieldCheck, LogIn } from 'lucide-react';
+import { authService } from '../services/api';
 import { Label } from '../components/ui/Label';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { Alert } from '../components/ui/Alert';
 
 export default function Login() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -19,12 +26,101 @@ export default function Login() {
       ...prev,
       [name]: value,
     }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+
+    if (formError) {
+      setFormError('');
+    }
   };
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    const errors = {};
+    const trimmedEmail = formData.email.trim();
+
+    if (!trimmedEmail) {
+      errors.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid email address.';
+    }
+
+    if (!formData.password) {
+      errors.password = 'Password is required.';
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must contain at least 8 characters.';
+    }
+
+    return errors;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // NOTE: Login API contract is not yet provided.
-    // In accordance with instructions, no API request or mock authentication is implemented.
+    if (isSubmitting) return;
+
+    setFormError('');
+    setFieldErrors({});
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await authService.login({
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+
+      if (response.data?.success && response.data?.data?.token) {
+        localStorage.setItem('token', response.data.data.token);
+        if (response.data.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.data.user));
+        }
+        navigate('/dashboard');
+      } else {
+        setFormError('Login failed. Please verify your credentials.');
+      }
+    } catch (err) {
+      if (!err.response) {
+        setFormError('Unable to connect to the server. Please check your connection.');
+        return;
+      }
+
+      const status = err.response.status;
+      const data = err.response.data || {};
+      const errorMessage = data.error?.message;
+      const errorCode = data.error?.code;
+
+      if (status === 401 || errorCode === 'INVALID_CREDENTIALS') {
+        setFormError(errorMessage || 'Invalid email or password.');
+      } else if (errorCode === 'ACCOUNT_PENDING') {
+        setFormError(errorMessage || 'Your account is pending admin approval.');
+      } else if (errorCode === 'ACCOUNT_INACTIVE') {
+        setFormError(errorMessage || 'Your account is currently inactive.');
+      } else if (errorCode === 'VALIDATION_ERROR') {
+        if (data.error?.details?.field) {
+          setFieldErrors({
+            [data.error.details.field]: data.error.details.reason || errorMessage,
+          });
+        }
+        setFormError(errorMessage || 'Invalid login data.');
+      } else if (status >= 500) {
+        setFormError('An unexpected server error occurred. Please try again later.');
+      } else {
+        setFormError(errorMessage || 'Login failed. Please verify your credentials and try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -36,7 +132,7 @@ export default function Login() {
           <span>CAMPUS360</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-[#000000] tracking-tight">
-          Skyline Student Association
+          LDCE Student Association
         </h1>
         <p className="mt-1 text-sm text-[#555555]">
           Unified operating platform for campus leadership & operations
@@ -56,6 +152,13 @@ export default function Login() {
             </p>
           </div>
 
+          {/* Form-Level Error Alert */}
+          {formError && (
+            <Alert variant="error" className="mb-4">
+              {formError}
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Email Address */}
             <div>
@@ -70,8 +173,14 @@ export default function Login() {
                 placeholder="e.g. maanas@gmail.com"
                 value={formData.email}
                 onChange={handleChange}
+                error={Boolean(fieldErrors.email)}
                 required
               />
+              {fieldErrors.email && (
+                <p className="mt-1 text-xs text-red-600 font-medium">
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             {/* Password */}
@@ -96,6 +205,7 @@ export default function Login() {
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
+                  error={Boolean(fieldErrors.password)}
                   className="pr-10"
                   required
                 />
@@ -113,6 +223,11 @@ export default function Login() {
                   )}
                 </button>
               </div>
+              {fieldErrors.password && (
+                <p className="mt-1 text-xs text-red-600 font-medium">
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
@@ -120,6 +235,8 @@ export default function Login() {
               <Button
                 type="submit"
                 variant="primary"
+                isLoading={isSubmitting}
+                disabled={isSubmitting}
                 className="w-full h-11 text-base font-semibold"
               >
                 Sign In
@@ -142,7 +259,7 @@ export default function Login() {
 
       {/* Footer System Info */}
       <footer className="max-w-md w-full mx-auto text-center mt-6 text-xs text-[#8F8F8F]">
-        <p>Odoo × LDCE Hackathon 2026 — Skyline Student Association</p>
+        <p>Odoo × LDCE Hackathon 2026 — LDCE Student Association</p>
       </footer>
     </div>
   );

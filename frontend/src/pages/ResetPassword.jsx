@@ -177,7 +177,7 @@ export default function ResetPassword() {
           <span>CAMPUS360</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-[#000000] tracking-tight">
-          Skyline Student Association
+          LDCE Student Association
         </h1>
         <p className="mt-1 text-sm text-[#555555]">
           Unified operating platform for campus leadership & operations
@@ -343,7 +343,7 @@ export default function ResetPassword() {
 
       {/* Footer System Info */}
       <footer className="max-w-md w-full mx-auto text-center mt-6 text-xs text-[#8F8F8F]">
-        <p>Odoo × LDCE Hackathon 2026 — Skyline Student Association</p>
+        <p>Odoo × LDCE Hackathon 2026 — LDCE Student Association</p>
       </footer>
     </div>
   );

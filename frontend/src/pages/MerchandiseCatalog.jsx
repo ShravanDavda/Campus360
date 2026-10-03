@@ -46,7 +46,7 @@ export default function MerchandiseCatalog() {
       <div>
         <h1 className="text-2xl font-bold text-[#000000]">Official Merchandise</h1>
         <p className="text-sm text-[#555555] mt-1">
-          Exclusive apparel and gear for Skyline Student Association members.
+          Exclusive apparel and gear for LDCE Student Association members.
         </p>
       </div>
 
