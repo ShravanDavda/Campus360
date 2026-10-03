@@ -7,24 +7,24 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 
-// Publicly registrable roles allowed by the system API contract
+// Publicly registrable roles allowed by the locked API contract
+// NOTE: admin, student, and member are not public registration roles
 const ALLOWED_ROLES = [
-  { value: 'MEMBER', label: 'Member' },
-  { value: 'EVENT_ORGANIZER', label: 'Event Organizer' },
-  { value: 'VOLUNTEER', label: 'Volunteer' },
-  { value: 'TREASURER', label: 'Treasurer' },
+  { value: 'eventOrganizer', label: 'Event Organizer' },
+  { value: 'volunteer', label: 'Volunteer' },
+  { value: 'treasurer', label: 'Treasurer' },
 ];
 
 export default function Register() {
   const navigate = useNavigate();
 
-  // Form state
+  // Form state - exactly matching locked contract
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
-    phone: '',
     password: '',
     confirmPassword: '',
+    phoneNumber: '',
     role: '',
   });
 
@@ -33,6 +33,7 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -61,39 +62,50 @@ export default function Register() {
   const validateForm = () => {
     const errors = {};
 
-    // Full Name
-    if (!formData.fullName.trim()) {
+    // 1. Full Name: required, 2-100 characters
+    const trimmedName = formData.fullName.trim();
+    if (!trimmedName) {
       errors.fullName = 'Full name is required.';
+    } else if (trimmedName.length < 2) {
+      errors.fullName = 'Full name must be at least 2 characters.';
+    } else if (trimmedName.length > 100) {
+      errors.fullName = 'Full name cannot exceed 100 characters.';
     }
 
-    // Email
-    if (!formData.email.trim()) {
+    // 2. Email: required, valid syntax (stored exactly as received - NOT lowercased)
+    const trimmedEmail = formData.email.trim();
+    if (!trimmedEmail) {
       errors.email = 'Email address is required.';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email.trim())) {
+      if (!emailRegex.test(trimmedEmail)) {
         errors.email = 'Enter a valid email address.';
       }
     }
 
-    // Phone
-    if (!formData.phone.trim()) {
-      errors.phone = 'Phone number is required.';
-    }
-
-    // Password
+    // 3. Password: required, minimum 8 characters
     if (!formData.password) {
       errors.password = 'Password is required.';
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters.';
     }
 
-    // Confirm Password (frontend-only check)
+    // 4. Confirm Password: frontend-only check, must equal password
     if (!formData.confirmPassword) {
       errors.confirmPassword = 'Confirm password is required.';
     } else if (formData.password !== formData.confirmPassword) {
       errors.confirmPassword = 'Passwords do not match.';
     }
 
-    // Role
+    // 5. Phone Number: required, exactly 10 digits, digits only
+    const trimmedPhone = formData.phoneNumber.trim();
+    if (!trimmedPhone) {
+      errors.phoneNumber = 'Phone number is required.';
+    } else if (!/^\d{10}$/.test(trimmedPhone)) {
+      errors.phoneNumber = 'Phone number must contain exactly 10 digits.';
+    }
+
+    // 6. Role: required, one of the three approved public roles
     if (!formData.role) {
       errors.role = 'Please select a role.';
     } else if (!ALLOWED_ROLES.some((r) => r.value === formData.role)) {
@@ -121,13 +133,15 @@ export default function Register() {
       return;
     }
 
-    // Normalize payload according to specification
-    // NOTE: confirmPassword is intentionally excluded
+    // Construct EXACT five-field payload according to the new locked contract:
+    // fullName, email, password, phoneNumber, role
+    // NOTE: confirmPassword, phone, status are NEVER included
+    // NOTE: email is NOT lowercased, preserved exactly as received
     const payload = {
       fullName: formData.fullName.trim(),
-      email: formData.email.trim().toLowerCase(),
-      phone: formData.phone.trim(),
+      email: formData.email.trim(),
       password: formData.password,
+      phoneNumber: formData.phoneNumber.trim(),
       role: formData.role,
     };
 
@@ -140,18 +154,22 @@ export default function Register() {
         setIsSuccess(true);
         setFormError('');
         setFieldErrors({});
+        setSuccessMessage(
+          response.data?.message ||
+            'Registration successful. Your account is pending admin approval.'
+        );
 
-        // Redirect to login after brief confirmation
+        // Redirect to /login after brief confirmation
         setTimeout(() => {
           navigate('/login');
         }, 1500);
       } else {
-        setFormError('Account creation could not be completed. Please try again.');
+        setFormError('Registration could not be completed. Please try again.');
       }
     } catch (err) {
       if (!err.response) {
         // Network or connection failure
-        setFormError('Unable to connect to the server. Please check your connection and try again.');
+        setFormError('Unable to connect to the server. Please try again.');
         setIsSubmitting(false);
         return;
       }
@@ -160,16 +178,17 @@ export default function Register() {
       const data = err.response.data || {};
       const errorCode = data.error?.code;
       const errorMessage = data.error?.message;
+      const errorDetails = data.error?.details;
 
       if (errorCode === 'EMAIL_ALREADY_EXISTS') {
         setFieldErrors((prev) => ({
           ...prev,
-          email: 'An account with this email already exists.',
+          email: errorMessage || 'An account with this email already exists.',
         }));
       } else if (errorCode === 'PHONE_ALREADY_EXISTS') {
         setFieldErrors((prev) => ({
           ...prev,
-          phone: errorMessage || 'An account with this phone number already exists.',
+          phoneNumber: errorMessage || 'An account with this phone number already exists.',
         }));
       } else if (errorCode === 'ROLE_NOT_ALLOWED' || status === 403) {
         setFormError(errorMessage || 'Admin accounts cannot be created through public registration.');
@@ -178,16 +197,18 @@ export default function Register() {
           ...prev,
           role: errorMessage || 'A valid registration role is required.',
         }));
-      } else if (errorCode === 'WEAK_PASSWORD') {
-        setFieldErrors((prev) => ({
-          ...prev,
-          password: errorMessage || 'Password does not meet the required policy.',
-        }));
-      } else if (errorCode === 'VALIDATION_ERROR' && data.error?.fields) {
-        setFieldErrors(data.error.fields);
-        setFormError(errorMessage || 'Please correct the highlighted fields.');
+      } else if (errorCode === 'VALIDATION_ERROR') {
+        if (errorDetails && errorDetails.field && errorDetails.reason) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            [errorDetails.field]: errorDetails.reason,
+          }));
+        } else if (data.error?.fields) {
+          setFieldErrors(data.error.fields);
+        }
+        setFormError(errorMessage || 'Invalid registration data.');
       } else if (status >= 500) {
-        setFormError('Something went wrong while creating the account. Please try again.');
+        setFormError('An unexpected error occurred. Please try again later.');
       } else {
         setFormError(errorMessage || 'Registration failed. Please verify your details and try again.');
       }
@@ -202,7 +223,7 @@ export default function Register() {
       <header className="max-w-md w-full mx-auto text-center mb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-[#714B67] bg-opacity-10 text-[#714B67] text-xs font-semibold tracking-wider uppercase mb-3">
           <ShieldCheck className="w-4 h-4 text-[#714B67]" aria-hidden="true" />
-          <span>Student Organization System</span>
+          <span>CAMPUS360</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-[#000000] tracking-tight">
           Skyline Student Association
@@ -221,14 +242,14 @@ export default function Register() {
               Create an Account
             </h2>
             <p className="text-xs sm:text-sm text-[#666666] mt-1">
-              Enter your details to register as an organization member or leader.
+              Enter your details to register as an organization leader or volunteer.
             </p>
           </div>
 
           {/* Form-Level Success Alert */}
           {isSuccess && (
             <Alert variant="success" className="mb-6">
-              Account created successfully. Redirecting to login…
+              {successMessage || 'Registration successful. Your account is pending admin approval.'}
             </Alert>
           )}
 
@@ -240,7 +261,7 @@ export default function Register() {
           )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            {/* Full Name */}
+            {/* 1. Full Name */}
             <div>
               <Label htmlFor="fullName" required>
                 Full Name
@@ -250,7 +271,7 @@ export default function Register() {
                 name="fullName"
                 type="text"
                 autoComplete="name"
-                placeholder="e.g. Shravan Patel"
+                placeholder="e.g. Maanas Manekar"
                 value={formData.fullName}
                 onChange={handleChange}
                 disabled={isSubmitting || isSuccess}
@@ -265,7 +286,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* Email Address */}
+            {/* 2. Email Address */}
             <div>
               <Label htmlFor="email" required>
                 Email Address
@@ -275,7 +296,7 @@ export default function Register() {
                 name="email"
                 type="email"
                 autoComplete="email"
-                placeholder="e.g. shravan@example.com"
+                placeholder="e.g. maanas@gmail.com"
                 value={formData.email}
                 onChange={handleChange}
                 disabled={isSubmitting || isSuccess}
@@ -290,32 +311,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* Phone Number */}
-            <div>
-              <Label htmlFor="phone" required>
-                Phone Number
-              </Label>
-              <Input
-                id="phone"
-                name="phone"
-                type="tel"
-                autoComplete="tel"
-                placeholder="e.g. +919876543210"
-                value={formData.phone}
-                onChange={handleChange}
-                disabled={isSubmitting || isSuccess}
-                error={!!fieldErrors.phone}
-                aria-invalid={!!fieldErrors.phone}
-                aria-describedby={fieldErrors.phone ? "phone-error" : undefined}
-              />
-              {fieldErrors.phone && (
-                <p id="phone-error" className="mt-1 text-xs text-[#c0392b] font-medium">
-                  {fieldErrors.phone}
-                </p>
-              )}
-            </div>
-
-            {/* Password */}
+            {/* 3. Password */}
             <div>
               <Label htmlFor="password" required>
                 Password
@@ -326,7 +322,7 @@ export default function Register() {
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
-                  placeholder="Enter a secure password"
+                  placeholder="Enter a secure password (min. 8 characters)"
                   value={formData.password}
                   onChange={handleChange}
                   disabled={isSubmitting || isSuccess}
@@ -356,7 +352,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* Confirm Password */}
+            {/* 4. Confirm Password */}
             <div>
               <Label htmlFor="confirmPassword" required>
                 Confirm Password
@@ -397,7 +393,32 @@ export default function Register() {
               )}
             </div>
 
-            {/* Role Select */}
+            {/* 5. Phone Number */}
+            <div>
+              <Label htmlFor="phoneNumber" required>
+                Phone Number
+              </Label>
+              <Input
+                id="phoneNumber"
+                name="phoneNumber"
+                type="tel"
+                autoComplete="tel"
+                placeholder="e.g. 9876543210"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                disabled={isSubmitting || isSuccess}
+                error={!!fieldErrors.phoneNumber}
+                aria-invalid={!!fieldErrors.phoneNumber}
+                aria-describedby={fieldErrors.phoneNumber ? "phoneNumber-error" : undefined}
+              />
+              {fieldErrors.phoneNumber && (
+                <p id="phoneNumber-error" className="mt-1 text-xs text-[#c0392b] font-medium">
+                  {fieldErrors.phoneNumber}
+                </p>
+              )}
+            </div>
+
+            {/* 6. Role Select */}
             <div>
               <Label htmlFor="role" required>
                 Role
@@ -430,7 +451,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* Submit Button */}
+            {/* 7. Submit Button */}
             <div className="pt-2">
               <Button
                 type="submit"
