@@ -18,6 +18,7 @@ import {
 import { sendPasswordResetOtp } from "../services/brevoService.js";
 
 const ALLOWED_ROLES = [
+  "admin",
   "eventOrganizer",
   "volunteer",
   "treasurer",

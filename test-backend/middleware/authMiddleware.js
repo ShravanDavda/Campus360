@@ -10,7 +10,7 @@ const unauthorized = () => {
 };
 
 const inactive = () => {
-  const error = new Error("Your account is currently inactive.");
+  const error = new Error("Your account is not active.");
   error.statusCode = 403;
   error.code = "ACCOUNT_INACTIVE";
   return error;
@@ -38,12 +38,7 @@ export const authenticate = async (req, res, next) => {
       return next(unauthorized());
     }
 
-    if (
-      !decoded ||
-      typeof decoded.sub !== "string" ||
-      typeof decoded.role !== "string" ||
-      decoded.status !== "active"
-    ) {
+    if (!decoded || typeof decoded.sub !== "string") {
       return next(unauthorized());
     }
 
@@ -78,3 +73,21 @@ export const authenticate = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const authorizeRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return next(unauthorized());
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      const error = new Error("You do not have permission to perform this action.");
+      error.statusCode = 403;
+      error.code = "FORBIDDEN";
+      return next(error);
+    }
+
+    return next();
+  };
+};
+

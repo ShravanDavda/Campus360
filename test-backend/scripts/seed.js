@@ -7,6 +7,7 @@ const IDS = {
   USER_MEMBER: 'a0000000-0000-0000-0000-000000000001',
   USER_ORGANIZER: 'a0000000-0000-0000-0000-000000000002',
   USER_TREASURER: 'a0000000-0000-0000-0000-000000000003',
+  USER_ADMIN: 'a0000000-0000-0000-0000-000000000004',
 
   // Membership
   MEMBERSHIP: 'b0000000-0000-0000-0000-000000000001',
@@ -114,6 +115,15 @@ async function seed() {
         password_hash: demoPasswordHash,
         phone_number: '9000000003',
         role: 'treasurer',
+        status: 'active',
+      },
+      {
+        id: IDS.USER_ADMIN,
+        full_name: 'Demo Admin',
+        email: 'demo.admin@campus360.local',
+        password_hash: demoPasswordHash,
+        phone_number: '9000000004',
+        role: 'admin',
         status: 'active',
       },
     ];
