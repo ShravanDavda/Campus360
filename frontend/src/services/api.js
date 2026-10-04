@@ -55,7 +55,10 @@ export const memberService = {
   updateProfile: (data) => api.patch('/member/profile', data), // { name, phoneNumber }
 
   // 3. Membership
+  getMembershipPlans: () => api.get('/member/membership/plans'),
   getMembership: () => api.get('/member/membership'),
+  applyMembership: (data) => api.post('/member/membership/apply', data),
+  payMembershipDues: (data = {}) => api.post('/member/membership/pay-dues', data),
 
   // 4. Events
   getEvents: (params) => api.get('/member/events', { params }), // { page, limit }
@@ -67,12 +70,12 @@ export const memberService = {
   getTicketDetails: (ticketId) => api.get(`/member/tickets/${ticketId}`),
 
   // 6. Products / Merchandise
-  getProducts: () => api.get('/member/products'),
+  getProducts: (params = {}) => api.get('/member/products', { params }),
   getProductDetails: (productId) => api.get(`/member/products/${productId}`),
 
   // 7. Orders
   createOrder: (data) => api.post('/member/orders', data), // { items: [{ productId, variantId, quantity }] }
-  getMyOrders: () => api.get('/member/orders'),
+  getMyOrders: (params = {}) => api.get('/member/orders', { params }),
   getOrderDetails: (orderId) => api.get(`/member/orders/${orderId}`),
 
   // 8. Announcements
@@ -102,6 +105,13 @@ export const adminService = {
   // 3. Activate Pending Member
   updateAdminMemberStatus: (userId, data) => api.patch(`/admin/members/${userId}/status`, data),
 
+  // 3b. Update Member System Role
+  updateAdminMemberRole: (userId, data) => api.patch(`/admin/members/${userId}/role`, data),
+
+  // 3c. Membership Plans Management (Admin Authoritative)
+  getAdminMembershipPlans: () => api.get('/admin/membership/plans'),
+  updateAdminMembershipPlan: (planId, data) => api.patch(`/admin/membership/plans/${planId}`, data),
+
   // 4. Admin Dashboard
   getDashboard: () => api.get('/admin/dashboard'),
 
@@ -112,6 +122,7 @@ export const adminService = {
     if (params.limit !== undefined && params.limit !== null) cleanParams.limit = params.limit;
     if (params.search && params.search.trim()) cleanParams.search = params.search.trim();
     if (params.status && params.status !== 'all') cleanParams.status = params.status;
+    if (params.organizerId && params.organizerId !== 'all') cleanParams.organizerId = params.organizerId;
     if (params.dateFrom) cleanParams.dateFrom = params.dateFrom;
     if (params.dateTo) cleanParams.dateTo = params.dateTo;
     if (params.capacityState && params.capacityState !== 'all') cleanParams.capacityState = params.capacityState;
@@ -119,6 +130,8 @@ export const adminService = {
     if (params.sortOrder) cleanParams.sortOrder = params.sortOrder;
     return api.get('/admin/events', { params: cleanParams });
   },
+
+  getOrganizers: () => api.get('/admin/events/organizers'),
 
   getAdminEvent: async (eventId) => {
     try {
@@ -476,16 +489,60 @@ export const adminService = {
     api.patch(`/admin/announcements/${announcementId}/status`, { status }),
 };
 
-// Event Organizer Service - Locked Contract
+// Event Organizer Service - Complete Operations Contract
 export const organizerService = {
   // GET /api/organizer/dashboard
   getDashboard: () => api.get('/organizer/dashboard'),
+
+  // GET /api/organizer/events
+  getEvents: (params = {}) => api.get('/organizer/events', { params }),
+
+  // POST /api/organizer/events
+  createEvent: (payload) => api.post('/organizer/events', payload),
+
+  // PATCH /api/organizer/events/:id
+  updateEvent: (eventId, payload) => api.patch(`/organizer/events/${eventId}`, payload),
+
+  // PATCH /api/organizer/events/:id/status
+  updateEventStatus: (eventId, status) => api.patch(`/organizer/events/${eventId}/status`, { status }),
+
+  // GET /api/organizer/events/:id/operations
+  getEventOperations: (eventId) => api.get(`/organizer/events/${eventId}/operations`),
+
+  // Ticket Types
+  getTicketTypes: (eventId) => api.get(`/organizer/events/${eventId}/ticket-types`),
+  createTicketType: (eventId, payload) => api.post(`/organizer/events/${eventId}/ticket-types`, payload),
+  editTicketType: (eventId, ticketTypeId, payload) =>
+    api.patch(`/organizer/events/${eventId}/ticket-types/${ticketTypeId}`, payload),
+
+  // Volunteers
+  getEventVolunteers: (eventId) => api.get(`/organizer/events/${eventId}/volunteers`),
+  getAvailableVolunteers: (eventId) => api.get(`/organizer/events/${eventId}/available-volunteers`),
+  assignVolunteer: (eventId, volunteerId) =>
+    api.post(`/organizer/events/${eventId}/volunteers`, { volunteerId }),
+  removeVolunteer: (eventId, volunteerId) =>
+    api.delete(`/organizer/events/${eventId}/volunteers/${volunteerId}`),
+
+  // Check-ins
+  checkInTicket: (eventId, ticketId) =>
+    api.post(`/organizer/events/${eventId}/check-ins`, { ticketId }),
+  getCheckIns: (eventId) => api.get(`/organizer/events/${eventId}/check-ins`),
 };
 
 // Volunteer Service - Locked Contract
 export const volunteerService = {
   // GET /api/volunteer/dashboard
   getDashboard: () => api.get('/volunteer/dashboard'),
+
+  // GET /api/volunteer/tasks
+  getTasks: (params = {}) => {
+    const cleanParams = {};
+    if (params.page !== undefined && params.page !== null) cleanParams.page = params.page;
+    if (params.limit !== undefined && params.limit !== null) cleanParams.limit = params.limit;
+    if (params.search && params.search.trim()) cleanParams.search = params.search.trim();
+    if (params.status && params.status !== 'all') cleanParams.status = params.status;
+    return api.get('/volunteer/tasks', { params: cleanParams });
+  },
 
   // PATCH /api/volunteer/tasks/:taskId/status
   updateTaskStatus: (taskId, status) =>

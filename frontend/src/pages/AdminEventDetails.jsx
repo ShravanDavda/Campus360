@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
+  User,
+  UserCheck,
 } from 'lucide-react';
 import { adminService } from '../services/api';
 import { Badge } from '../components/ui/Badge';
@@ -88,6 +90,10 @@ export default function AdminEventDetails() {
     loading: false,
   });
 
+  // Active organizers list
+  const [organizers, setOrganizers] = useState([]);
+  const [loadingOrganizers, setLoadingOrganizers] = useState(false);
+
   // Edit Event Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -100,6 +106,7 @@ export default function AdminEventDetails() {
     endTime: '',
     location: '',
     capacity: '',
+    organizerId: '',
   });
 
   // Ticket Type Modal State (Add or Edit)
@@ -143,6 +150,7 @@ export default function AdminEventDetails() {
           endTime: evt.endTime || evt.end_time || '',
           location: evt.location || '',
           capacity: evt.capacity || '',
+          organizerId: evt.organizerId || evt.created_by || '',
         });
 
         // Set ticket types if embedded in response
@@ -166,6 +174,28 @@ export default function AdminEventDetails() {
       setLoading(false);
     }
   }, [authError, eventId]);
+
+  // Load organizers on mount
+  useEffect(() => {
+    let isMounted = true;
+    const loadOrganizers = async () => {
+      setLoadingOrganizers(true);
+      try {
+        const res = await adminService.getOrganizers();
+        if (isMounted && res.data?.success && Array.isArray(res.data?.data?.organizers)) {
+          setOrganizers(res.data.data.organizers);
+        }
+      } catch (err) {
+        console.error('Failed to load organizers', err);
+      } finally {
+        if (isMounted) setLoadingOrganizers(false);
+      }
+    };
+    loadOrganizers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     loadEvent();
@@ -300,6 +330,7 @@ export default function AdminEventDetails() {
         endTime: editForm.endTime,
         location: editForm.location.trim(),
         capacity: cap,
+        organizerId: editForm.organizerId ? editForm.organizerId : null,
       };
 
       const res = await adminService.updateAdminEvent(eventId, payload);
@@ -574,6 +605,20 @@ export default function AdminEventDetails() {
               <div className="flex items-center gap-1.5 font-medium text-gray-900">
                 <MapPin className="w-4 h-4 text-[#714B67]" />
                 <span>{event.location}</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-medium text-gray-900">
+                <UserCheck className="w-4 h-4 text-[#714B67]" />
+                <span className="text-gray-500">Organizer:</span>
+                {event.organizerName ? (
+                  <span
+                    className="font-semibold text-[#714B67]"
+                    title={event.organizerEmail ? `${event.organizerName} (${event.organizerEmail})` : event.organizerName}
+                  >
+                    {event.organizerName}
+                  </span>
+                ) : (
+                  <span className="text-gray-400 italic font-normal">Unassigned</span>
+                )}
               </div>
             </div>
           </div>
@@ -1041,6 +1086,36 @@ export default function AdminEventDetails() {
                     disabled={editSubmitting}
                   />
                 </div>
+              </div>
+
+              {/* Event Organizer Assignment */}
+              <div>
+                <label htmlFor="edit-organizer" className="block text-xs font-semibold text-gray-700 mb-1">
+                  Event Organizer
+                </label>
+                <select
+                  id="edit-organizer"
+                  name="organizerId"
+                  value={editForm.organizerId || ''}
+                  onChange={handleEditInputChange}
+                  className="w-full h-9 rounded border border-[#e2e5e9] bg-white px-2.5 py-1 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#714B67]"
+                  disabled={editSubmitting}
+                >
+                  <option value="">Unassigned</option>
+                  {organizers.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} ({org.email})
+                    </option>
+                  ))}
+                </select>
+                {loadingOrganizers && (
+                  <p className="text-[11px] text-gray-500 mt-1">Loading active organizers...</p>
+                )}
+                {!loadingOrganizers && organizers.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    No active event organizers found.
+                  </p>
+                )}
               </div>
 
               <div className="pt-4 border-t border-[#e2e5e9] flex items-center justify-end gap-3">

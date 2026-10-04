@@ -45,12 +45,67 @@ import AdminAnnouncementDetails from './pages/AdminAnnouncementDetails';
 
 // Event Organizer Pages
 import OrganizerDashboard from './pages/OrganizerDashboard';
+import OrganizerEventOperations from './pages/OrganizerEventOperations';
 
 // Volunteer Pages
 import VolunteerDashboard from './pages/VolunteerDashboard';
 
 // Treasurer Pages
 import TreasurerDashboard from './pages/TreasurerDashboard';
+
+const getStoredUserRole = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const parsed = JSON.parse(userStr);
+      if (parsed?.role) return parsed.role;
+    }
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      const payloadBase64 = token.split('.')[1];
+      if (payloadBase64) {
+        const decoded = JSON.parse(atob(payloadBase64));
+        if (decoded?.role) return decoded.role;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return null;
+};
+
+function RoleRoute({ allowedRoles, children }) {
+  const role = getStoredUserRole();
+  if (role && !allowedRoles.includes(role)) {
+    const fallback = role === 'admin'
+      ? '/admin/dashboard'
+      : role === 'eventOrganizer'
+        ? '/organizer/dashboard'
+        : role === 'volunteer'
+          ? '/volunteer/dashboard'
+          : role === 'treasurer'
+            ? '/treasurer/dashboard'
+            : '/dashboard';
+    return <Navigate to={fallback} replace />;
+  }
+  return children;
+}
+
+function MemberCommerceRoute({ children }) {
+  const role = getStoredUserRole();
+  const operationalRoles = ['admin', 'eventOrganizer', 'volunteer', 'treasurer'];
+  if (role && operationalRoles.includes(role)) {
+    const fallback = role === 'admin'
+      ? '/admin/dashboard'
+      : role === 'eventOrganizer'
+        ? '/organizer/dashboard'
+        : role === 'volunteer'
+          ? '/volunteer/dashboard'
+          : '/treasurer/dashboard';
+    return <Navigate to={fallback} replace />;
+  }
+  return children;
+}
 
 function App() {
   return (
@@ -63,50 +118,53 @@ function App() {
         <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Protected Common Member Dashboard Routes */}
+        {/* Protected Dashboard Layout */}
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardHome />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/membership" element={<Membership />} />
+          <Route path="/membership" element={<RoleRoute allowedRoles={['student']}><Membership /></RoleRoute>} />
           <Route path="/events" element={<EventsList />} />
           <Route path="/events/:eventId" element={<EventDetails />} />
-          <Route path="/tickets" element={<MyTickets />} />
-          <Route path="/tickets/:ticketId" element={<TicketDetails />} />
-          <Route path="/merchandise" element={<MerchandiseCatalog />} />
-          <Route path="/merchandise/:productId" element={<ProductDetails />} />
-          <Route path="/orders" element={<MyOrders />} />
-          <Route path="/orders/:orderId" element={<OrderDetails />} />
           <Route path="/announcements" element={<AnnouncementsList />} />
           <Route path="/announcements/:announcementId" element={<AnnouncementDetails />} />
-          <Route path="/payments" element={<PaymentHistory />} />
+
+          {/* Tickets accessible to all authenticated users */}
+          <Route path="/tickets" element={<MyTickets />} />
+          <Route path="/tickets/:ticketId" element={<TicketDetails />} />
+          <Route path="/merchandise" element={<MemberCommerceRoute><MerchandiseCatalog /></MemberCommerceRoute>} />
+          <Route path="/merchandise/:productId" element={<MemberCommerceRoute><ProductDetails /></MemberCommerceRoute>} />
+          <Route path="/orders" element={<MemberCommerceRoute><MyOrders /></MemberCommerceRoute>} />
+          <Route path="/orders/:orderId" element={<MemberCommerceRoute><OrderDetails /></MemberCommerceRoute>} />
+          <Route path="/payments" element={<MemberCommerceRoute><PaymentHistory /></MemberCommerceRoute>} />
 
           {/* Admin Routes */}
-          <Route path="/admin/dashboard" element={<DashboardHome />} />
-          <Route path="/admin/members" element={<AdminMembers />} />
-          <Route path="/admin/members/:userId" element={<AdminMemberDetails />} />
-          <Route path="/admin/events" element={<AdminEvents />} />
-          <Route path="/admin/events/:eventId" element={<AdminEventDetails />} />
-          <Route path="/admin/merchandise" element={<AdminMerchandise />} />
-          <Route path="/admin/merchandise/:productId" element={<AdminProductDetails />} />
-          <Route path="/admin/fundraisers" element={<AdminFundraisers />} />
-          <Route path="/admin/fundraisers/:fundraiserId" element={<AdminFundraiserDetails />} />
-          <Route path="/admin/tasks" element={<AdminTasks />} />
-          <Route path="/admin/tasks/:taskId" element={<AdminTaskDetails />} />
-          <Route path="/admin/volunteers" element={<AdminVolunteers />} />
-          <Route path="/admin/volunteers/:volunteerId" element={<AdminVolunteerDetails />} />
-          <Route path="/admin/finance" element={<AdminFinance />} />
-          <Route path="/admin/finance/transactions/:transactionId" element={<AdminFinanceTransactionDetails />} />
-          <Route path="/admin/announcements" element={<AdminAnnouncements />} />
-          <Route path="/admin/announcements/:announcementId" element={<AdminAnnouncementDetails />} />
+          <Route path="/admin/dashboard" element={<RoleRoute allowedRoles={['admin']}><DashboardHome /></RoleRoute>} />
+          <Route path="/admin/members" element={<RoleRoute allowedRoles={['admin']}><AdminMembers /></RoleRoute>} />
+          <Route path="/admin/members/:userId" element={<RoleRoute allowedRoles={['admin']}><AdminMemberDetails /></RoleRoute>} />
+          <Route path="/admin/events" element={<RoleRoute allowedRoles={['admin']}><AdminEvents /></RoleRoute>} />
+          <Route path="/admin/events/:eventId" element={<RoleRoute allowedRoles={['admin']}><AdminEventDetails /></RoleRoute>} />
+          <Route path="/admin/merchandise" element={<RoleRoute allowedRoles={['admin']}><AdminMerchandise /></RoleRoute>} />
+          <Route path="/admin/merchandise/:productId" element={<RoleRoute allowedRoles={['admin']}><AdminProductDetails /></RoleRoute>} />
+          <Route path="/admin/fundraisers" element={<RoleRoute allowedRoles={['admin']}><AdminFundraisers /></RoleRoute>} />
+          <Route path="/admin/fundraisers/:fundraiserId" element={<RoleRoute allowedRoles={['admin']}><AdminFundraiserDetails /></RoleRoute>} />
+          <Route path="/admin/tasks" element={<RoleRoute allowedRoles={['admin']}><AdminTasks /></RoleRoute>} />
+          <Route path="/admin/tasks/:taskId" element={<RoleRoute allowedRoles={['admin']}><AdminTaskDetails /></RoleRoute>} />
+          <Route path="/admin/volunteers" element={<RoleRoute allowedRoles={['admin']}><AdminVolunteers /></RoleRoute>} />
+          <Route path="/admin/volunteers/:volunteerId" element={<RoleRoute allowedRoles={['admin']}><AdminVolunteerDetails /></RoleRoute>} />
+          <Route path="/admin/finance" element={<RoleRoute allowedRoles={['admin']}><AdminFinance /></RoleRoute>} />
+          <Route path="/admin/finance/transactions/:transactionId" element={<RoleRoute allowedRoles={['admin']}><AdminFinanceTransactionDetails /></RoleRoute>} />
+          <Route path="/admin/announcements" element={<RoleRoute allowedRoles={['admin']}><AdminAnnouncements /></RoleRoute>} />
+          <Route path="/admin/announcements/:announcementId" element={<RoleRoute allowedRoles={['admin']}><AdminAnnouncementDetails /></RoleRoute>} />
 
           {/* Event Organizer Routes */}
-          <Route path="/organizer/dashboard" element={<OrganizerDashboard />} />
+          <Route path="/organizer/dashboard" element={<RoleRoute allowedRoles={['eventOrganizer', 'admin']}><OrganizerDashboard /></RoleRoute>} />
+          <Route path="/organizer/events/:eventId" element={<RoleRoute allowedRoles={['eventOrganizer', 'admin']}><OrganizerEventOperations /></RoleRoute>} />
 
           {/* Volunteer Routes */}
-          <Route path="/volunteer/dashboard" element={<VolunteerDashboard />} />
+          <Route path="/volunteer/dashboard" element={<RoleRoute allowedRoles={['volunteer', 'admin']}><VolunteerDashboard /></RoleRoute>} />
 
           {/* Treasurer Routes */}
-          <Route path="/treasurer/dashboard" element={<TreasurerDashboard />} />
+          <Route path="/treasurer/dashboard" element={<RoleRoute allowedRoles={['treasurer', 'admin']}><TreasurerDashboard /></RoleRoute>} />
         </Route>
 
         {/* Redirects */}

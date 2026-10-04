@@ -8,6 +8,21 @@ import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 
+const formatRole = (role) => {
+  switch (role) {
+    case 'admin':
+      return 'Administrator';
+    case 'eventOrganizer':
+      return 'Event Organizer';
+    case 'volunteer':
+      return 'Volunteer';
+    case 'treasurer':
+      return 'Treasurer';
+    default:
+      return role || 'Member';
+  }
+};
+
 export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [formData, setFormData] = useState({ name: '', phoneNumber: '' });
@@ -153,7 +168,7 @@ export default function Profile() {
             </p>
           </div>
           {profile?.role && (
-            <Badge variant="purple">{profile.role}</Badge>
+            <Badge variant="purple">{formatRole(profile.role)}</Badge>
           )}
         </div>
 
@@ -248,9 +263,9 @@ export default function Profile() {
             <div className="relative">
               <Input
                 type="text"
-                value={profile?.role || 'Member'}
+                value={formatRole(profile?.role)}
                 disabled
-                className="bg-gray-100 text-gray-500 cursor-not-allowed capitalize"
+                className="bg-gray-100 text-gray-500 cursor-not-allowed"
               />
               <Shield className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
             </div>

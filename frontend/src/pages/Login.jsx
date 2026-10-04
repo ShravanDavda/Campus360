@@ -7,6 +7,23 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 
+const getRoleRedirect = (role) => {
+  switch (role) {
+    case 'admin':
+      return '/admin/dashboard';
+    case 'eventOrganizer':
+      return '/organizer/dashboard';
+    case 'volunteer':
+      return '/volunteer/dashboard';
+    case 'treasurer':
+      return '/treasurer/dashboard';
+    case 'student':
+      return '/dashboard';
+    default:
+      return '/dashboard';
+  }
+};
+
 export default function Login() {
   const navigate = useNavigate();
 
@@ -18,7 +35,13 @@ export default function Login() {
   React.useEffect(() => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
-      navigate('/dashboard', { replace: true });
+      try {
+        const userStr = localStorage.getItem('user');
+        const role = userStr ? JSON.parse(userStr)?.role : null;
+        navigate(getRoleRedirect(role), { replace: true });
+      } catch {
+        navigate('/dashboard', { replace: true });
+      }
     }
   }, [navigate]);
 
@@ -92,7 +115,8 @@ export default function Login() {
         if (response.data.data.user) {
           localStorage.setItem('user', JSON.stringify(response.data.data.user));
         }
-        navigate('/dashboard', { replace: true });
+        const userRole = response.data.data.user?.role;
+        navigate(getRoleRedirect(userRole), { replace: true });
       } else {
         setFormError('Login failed. Please verify your credentials.');
       }

@@ -517,9 +517,9 @@ export default function OrganizerDashboard() {
                             {/* Actions */}
                             <td className="py-3.5 px-4 text-center whitespace-nowrap">
                               <Link
-                                to={`/events/${evt.id}`}
+                                to={`/organizer/events/${evt.id}`}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#714B67] bg-[#714B67]/10 hover:bg-[#714B67]/20 rounded transition-colors focus:outline-none focus:ring-1 focus:ring-[#714B67]"
-                                aria-label={`View details for ${evt.title}`}
+                                aria-label={`View operations for ${evt.title}`}
                               >
                                 <Eye className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>View</span>
@@ -582,12 +582,12 @@ export default function OrganizerDashboard() {
 
                       <div className="pt-2 border-t border-[#e2e5e9] flex justify-end">
                         <Link
-                          to={`/events/${evt.id}`}
+                          to={`/organizer/events/${evt.id}`}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-[#714B67] bg-[#714B67]/10 hover:bg-[#714B67]/20 rounded transition-colors"
-                          aria-label={`View details for ${evt.title}`}
+                          aria-label={`View operations for ${evt.title}`}
                         >
                           <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>View Event Details</span>
+                          <span>View Operations</span>
                         </Link>
                       </div>
                     </div>

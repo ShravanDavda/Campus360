@@ -16,6 +16,7 @@ export default function EventDetails() {
   const [eventData, setEventData] = useState(null);
   const [selectedTicketType, setSelectedTicketType] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [userMembership, setUserMembership] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -26,9 +27,19 @@ export default function EventDetails() {
       setLoading(true);
       setFormError('');
       try {
-        const response = await memberService.getEventDetails(eventId);
-        if (response.data?.success) {
-          const data = response.data.data;
+        const [eventRes, memRes] = await Promise.allSettled([
+          memberService.getEventDetails(eventId),
+          memberService.getMembership(),
+        ]);
+
+        if (memRes.status === 'fulfilled' && memRes.value.data?.success) {
+          setUserMembership(memRes.value.data.data);
+        } else {
+          setUserMembership(null);
+        }
+
+        if (eventRes.status === 'fulfilled' && eventRes.value.data?.success) {
+          const data = eventRes.value.data.data;
           const event = data.event || data;
           const ticketTypes = data.ticketTypes || event.ticketTypes || [];
           setEventData({ ...event, ticketTypes });
@@ -209,11 +220,17 @@ export default function EventDetails() {
                     disabled={isSubmitting}
                     className="w-full h-10 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#714B67]"
                   >
-                    {ticketTypes.map((tt) => (
-                      <option key={tt.id} value={tt.id}>
-                        {tt.name} — ₹{tt.memberPrice}
-                      </option>
-                    ))}
+                    {ticketTypes.map((tt) => {
+                      const isMemberActive =
+                        userMembership?.status === 'ACTIVE' &&
+                        new Date(userMembership.expiryDate).getTime() >= Date.now();
+                      const price = isMemberActive ? tt.memberPrice : (tt.nonMemberPrice ?? tt.memberPrice);
+                      return (
+                        <option key={tt.id} value={tt.id}>
+                          {tt.name} — ₹{price} {isMemberActive ? '(Member Price)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -236,20 +253,50 @@ export default function EventDetails() {
                   )}
                 </div>
 
-                {selectedTypeObj && (
-                  <div className="p-3 bg-white border border-[#e2e5e9] rounded text-xs space-y-1">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Price per ticket:</span>
-                      <span className="font-semibold text-gray-900">₹{selectedTypeObj.memberPrice}</span>
+                {selectedTypeObj && (() => {
+                  const isMemberActive =
+                    userMembership?.status === 'ACTIVE' &&
+                    new Date(userMembership.expiryDate).getTime() >= Date.now();
+                  const unitPrice = isMemberActive
+                    ? Number(selectedTypeObj.memberPrice || 0)
+                    : Number(selectedTypeObj.nonMemberPrice ?? selectedTypeObj.memberPrice ?? 0);
+                  const memPrice = Number(selectedTypeObj.memberPrice || 0);
+                  const nonMemPrice = Number(selectedTypeObj.nonMemberPrice ?? selectedTypeObj.memberPrice ?? 0);
+
+                  return (
+                    <div className="p-3 bg-white border border-[#e2e5e9] rounded text-xs space-y-2">
+                      <div className="flex justify-between items-center text-gray-700">
+                        <span>{isMemberActive ? 'Member Price:' : 'Ticket Price:'}</span>
+                        <span className="font-bold text-gray-900 text-sm">
+                          ₹{unitPrice.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {!isMemberActive && nonMemPrice > memPrice && (
+                        <div className="flex justify-between text-gray-500 text-[11px] border-t border-gray-100 pt-1">
+                          <span>Member Special:</span>
+                          <span className="text-[#714B67] font-semibold">
+                            ₹{memPrice.toFixed(2)} (Save ₹{(nonMemPrice - memPrice).toFixed(2)})
+                          </span>
+                        </div>
+                      )}
+
+                      {isMemberActive && (
+                        <div className="flex justify-between text-emerald-700 text-[11px] border-t border-gray-100 pt-1">
+                          <span>Member Discount:</span>
+                          <span className="font-semibold">Applied</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between text-gray-700 border-t border-gray-100 pt-1">
+                        <span>Est. Total:</span>
+                        <span className="font-bold text-[#017E84] text-sm">
+                          ₹{(unitPrice * (parseInt(quantity, 10) || 1)).toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Est. Total (display only):</span>
-                      <span className="font-bold text-[#017E84]">
-                        ₹{(selectedTypeObj.memberPrice || 0) * (parseInt(quantity, 10) || 1)}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <Button
                   type="submit"

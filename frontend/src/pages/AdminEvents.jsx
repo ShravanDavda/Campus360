@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Clock,
   MapPin,
+  User,
 } from 'lucide-react';
 import { adminService } from '../services/api';
 import { Badge } from '../components/ui/Badge';
@@ -84,16 +85,20 @@ export default function AdminEvents() {
   const [tableError, setTableError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Search state management (Mode 1: Live Search vs Mode 2: Search Button)
-  const [searchMode, setSearchMode] = useState('live'); // 'live' | 'button'
+  // Search state management (Explicit Search Button / Enter only)
   const [searchInput, setSearchInput] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
 
   // Filters state
   const [statusFilter, setStatusFilter] = useState('all');
+  const [organizerFilter, setOrganizerFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [capacityFilter, setCapacityFilter] = useState('all');
+
+  // Active organizers list
+  const [organizers, setOrganizers] = useState([]);
+  const [loadingOrganizers, setLoadingOrganizers] = useState(false);
 
   // Sorting state (server-side)
   const [sortBy, setSortBy] = useState('date');
@@ -114,6 +119,7 @@ export default function AdminEvents() {
     endTime: '',
     location: '',
     capacity: '',
+    organizerId: '',
   });
 
   // Stale request protection counter
@@ -127,34 +133,34 @@ export default function AdminEvents() {
     }
   }, [navigate]);
 
-  // Mode 1: Live debounced search effect
+  // Load organizers on mount
   useEffect(() => {
-    if (searchMode !== 'live') return;
+    let isMounted = true;
+    const loadOrganizers = async () => {
+      setLoadingOrganizers(true);
+      try {
+        const res = await adminService.getOrganizers();
+        if (isMounted && res.data?.success && Array.isArray(res.data?.data?.organizers)) {
+          setOrganizers(res.data.data.organizers);
+        }
+      } catch (err) {
+        console.error('Failed to load event organizers:', err);
+      } finally {
+        if (isMounted) setLoadingOrganizers(false);
+      }
+    };
+    loadOrganizers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-    const timer = setTimeout(() => {
-      setSubmittedSearch(searchInput.trim());
-      setCurrentPage(1);
-    }, 350);
-
-    return () => clearTimeout(timer);
-  }, [searchInput, searchMode]);
-
-  // Mode 2: Button search trigger
+  // Search button / Enter trigger
   const handleButtonSearch = (e) => {
     if (e) e.preventDefault();
     if (loading) return; // Prevent duplicate requests while loading
     setSubmittedSearch(searchInput.trim());
     setCurrentPage(1);
-  };
-
-  // Switch search mode cleanly
-  const handleModeChange = (mode) => {
-    setSearchMode(mode);
-    if (mode === 'live') {
-      // In live mode, sync submittedSearch with current input
-      setSubmittedSearch(searchInput.trim());
-      setCurrentPage(1);
-    }
   };
 
   // Clear search query
@@ -169,6 +175,7 @@ export default function AdminEvents() {
     setSearchInput('');
     setSubmittedSearch('');
     setStatusFilter('all');
+    setOrganizerFilter('all');
     setDateFrom('');
     setDateTo('');
     setCapacityFilter('all');
@@ -207,6 +214,9 @@ export default function AdminEvents() {
       }
       if (statusFilter !== 'all') {
         params.status = statusFilter;
+      }
+      if (organizerFilter !== 'all') {
+        params.organizerId = organizerFilter;
       }
       if (dateFrom) {
         params.dateFrom = dateFrom;
@@ -265,7 +275,7 @@ export default function AdminEvents() {
         setLoading(false);
       }
     }
-  }, [authError, currentPage, submittedSearch, statusFilter, dateFrom, dateTo, capacityFilter, sortBy, sortOrder]);
+  }, [authError, currentPage, submittedSearch, statusFilter, organizerFilter, dateFrom, dateTo, capacityFilter, sortBy, sortOrder]);
 
   // Load events on dependency change
   useEffect(() => {
@@ -327,6 +337,7 @@ export default function AdminEvents() {
         endTime: createForm.endTime,
         location: createForm.location.trim(),
         capacity: capNum,
+        organizerId: createForm.organizerId ? createForm.organizerId : null,
       };
 
       const res = await adminService.createAdminEvent(payload);
@@ -344,6 +355,7 @@ export default function AdminEvents() {
           endTime: '',
           location: '',
           capacity: '',
+          organizerId: '',
         });
         // Revalidate event list
         fetchEvents();
@@ -379,6 +391,7 @@ export default function AdminEvents() {
   const hasActiveFilters =
     Boolean(submittedSearch) ||
     statusFilter !== 'all' ||
+    organizerFilter !== 'all' ||
     Boolean(dateFrom) ||
     Boolean(dateTo) ||
     capacityFilter !== 'all';
@@ -447,41 +460,8 @@ export default function AdminEvents() {
 
       {/* Search and Controls Section */}
       <div className="bg-white border border-[#e2e5e9] rounded-lg p-4 shadow-sm space-y-4">
-        {/* Search Mode Selector & Input */}
+        {/* Search Input & Button */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Mode Switcher */}
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-              Search Mode:
-            </span>
-            <div className="inline-flex rounded border border-[#e2e5e9] p-0.5 bg-gray-50">
-              <button
-                type="button"
-                onClick={() => handleModeChange('live')}
-                className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                  searchMode === 'live'
-                    ? 'bg-[#714B67] text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                aria-pressed={searchMode === 'live'}
-              >
-                Live Search (Debounced)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleModeChange('button')}
-                className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                  searchMode === 'button'
-                    ? 'bg-[#714B67] text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                aria-pressed={searchMode === 'button'}
-              >
-                Search Button
-              </button>
-            </div>
-          </div>
-
           {/* Search Box Form */}
           <form
             onSubmit={handleButtonSearch}
@@ -496,11 +476,7 @@ export default function AdminEvents() {
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder={
-                  searchMode === 'live'
-                    ? 'Type to live search events...'
-                    : 'Type event title or location...'
-                }
+                placeholder="Type event title or location..."
                 className="pl-9 pr-8 h-10 w-full text-sm"
                 aria-label="Search events"
               />
@@ -516,22 +492,20 @@ export default function AdminEvents() {
               )}
             </div>
 
-            {searchMode === 'button' && (
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={loading}
-                isLoading={loading}
-                className="shrink-0 h-10"
-              >
-                Search
-              </Button>
-            )}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading}
+              isLoading={loading}
+              className="shrink-0 h-10"
+            >
+              Search
+            </Button>
           </form>
         </div>
 
         {/* Filter Dropdowns */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#e2e5e9]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-[#e2e5e9]">
           {/* Status Filter */}
           <div>
             <label htmlFor="status-filter" className="block text-xs font-semibold text-gray-700 mb-1">
@@ -549,6 +523,30 @@ export default function AdminEvents() {
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Organizer Filter */}
+          <div>
+            <label htmlFor="organizer-filter" className="block text-xs font-semibold text-gray-700 mb-1">
+              Organizer
+            </label>
+            <select
+              id="organizer-filter"
+              value={organizerFilter}
+              onChange={(e) => {
+                setOrganizerFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full h-9 text-xs rounded border border-[#e2e5e9] bg-white px-2.5 py-1 text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#714B67]"
+            >
+              <option value="all">All Organizers</option>
+              <option value="unassigned">Unassigned</option>
+              {organizers.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.name}
                 </option>
               ))}
             </select>
@@ -641,6 +639,23 @@ export default function AdminEvents() {
                   }}
                   className="hover:text-red-700 focus:outline-none"
                   aria-label="Remove status filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            )}
+
+            {organizerFilter !== 'all' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#714B67]/10 text-[#714B67] text-xs font-semibold border border-[#714B67]/20">
+                Organizer: {organizerFilter === 'unassigned' ? 'Unassigned' : (organizers.find((o) => o.id === organizerFilter)?.name || 'Selected')}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrganizerFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  className="hover:text-red-700 focus:outline-none"
+                  aria-label="Remove organizer filter"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -797,6 +812,18 @@ export default function AdminEvents() {
                     Location
                   </th>
 
+                  {/* Organizer */}
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('organizer')}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Organizer</span>
+                      {renderSortIndicator('organizer')}
+                    </div>
+                  </th>
+
                   {/* Capacity */}
                   <th
                     scope="col"
@@ -893,6 +920,25 @@ export default function AdminEvents() {
                         <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         <span className="truncate max-w-[150px]">{evt.location || '—'}</span>
                       </div>
+                    </td>
+
+                    {/* Organizer */}
+                    <td className="px-4 py-3.5 text-xs whitespace-nowrap">
+                      {evt.organizerName ? (
+                        <div
+                          className="flex items-center gap-1.5"
+                          title={evt.organizerEmail ? `${evt.organizerName} (${evt.organizerEmail})` : evt.organizerName}
+                        >
+                          <User className="w-3.5 h-3.5 text-[#714B67] shrink-0" />
+                          <span className="font-semibold text-gray-900 truncate max-w-[130px]">
+                            {evt.organizerName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-500 italic">
+                          Unassigned
+                        </span>
+                      )}
                     </td>
 
                     {/* Capacity */}
@@ -1132,6 +1178,36 @@ export default function AdminEvents() {
                     disabled={createSubmitting}
                   />
                 </div>
+              </div>
+
+              {/* Event Organizer Assignment */}
+              <div>
+                <label htmlFor="evt-organizer" className="block text-xs font-semibold text-gray-700 mb-1">
+                  Event Organizer
+                </label>
+                <select
+                  id="evt-organizer"
+                  name="organizerId"
+                  value={createForm.organizerId || ''}
+                  onChange={handleCreateInputChange}
+                  className="w-full h-9 rounded border border-[#e2e5e9] bg-white px-2.5 py-1 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#714B67]"
+                  disabled={createSubmitting}
+                >
+                  <option value="">Unassigned</option>
+                  {organizers.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} ({org.email})
+                    </option>
+                  ))}
+                </select>
+                {loadingOrganizers && (
+                  <p className="text-[11px] text-gray-500 mt-1">Loading active organizers...</p>
+                )}
+                {!loadingOrganizers && organizers.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    No active event organizers found. Event can be created as Unassigned.
+                  </p>
+                )}
               </div>
 
               <div className="text-xs text-gray-500 bg-gray-50 p-2.5 rounded border border-[#e2e5e9]">

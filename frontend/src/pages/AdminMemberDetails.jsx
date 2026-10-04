@@ -26,6 +26,10 @@ const formatRole = (role) => {
       return 'Volunteer';
     case 'treasurer':
       return 'Treasurer';
+    case 'membershipOfficer':
+      return 'Membership Officer';
+    case 'student':
+      return 'Student';
     default:
       return role || '—';
   }
@@ -38,6 +42,9 @@ const getStatusBadge = (status) => {
   }
   if (norm === 'pending') {
     return <Badge variant="gold">Pending</Badge>;
+  }
+  if (norm === 'rejected') {
+    return <Badge variant="danger">Rejected</Badge>;
   }
   return <Badge variant="gray">{status || '—'}</Badge>;
 };
@@ -63,6 +70,8 @@ export default function AdminMemberDetails() {
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
   const [isActivating, setIsActivating] = useState(false);
+  const [selectedRole, setSelectedRole] = useState('');
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -82,6 +91,7 @@ export default function AdminMemberDetails() {
         const response = await adminService.getAdminMember(userId);
         if (response.data?.success && response.data?.data) {
           setMember(response.data.data);
+          setSelectedRole(response.data.data.role);
         } else {
           setError('Member record not found.');
         }
@@ -161,6 +171,38 @@ export default function AdminMemberDetails() {
       }
     } finally {
       setIsActivating(false);
+    }
+  };
+
+  const handleRoleUpdate = async () => {
+    if (isUpdatingRole || !member || !selectedRole || selectedRole === member.role) return;
+
+    setActionError('');
+    setActionSuccess('');
+    setIsUpdatingRole(true);
+
+    try {
+      const response = await adminService.updateAdminMemberRole(member.id, {
+        role: selectedRole,
+      });
+
+      if (response.data?.success) {
+        setActionSuccess(response.data.message || `Member role updated to ${formatRole(selectedRole)}.`);
+        setMember((prev) => ({
+          ...prev,
+          role: selectedRole,
+        }));
+      } else {
+        setActionError('Failed to update member role.');
+      }
+    } catch (err) {
+      setActionError(
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to update member role.'
+      );
+    } finally {
+      setIsUpdatingRole(false);
     }
   };
 
@@ -276,6 +318,36 @@ export default function AdminMemberDetails() {
                 {formatRole(member.role)}
               </dd>
             </div>
+            {member.role !== 'admin' && (
+              <div className="pt-2 border-t border-[#e2e5e9]">
+                <dt className="text-xs text-gray-500 font-medium mb-1">Assign Role</dt>
+                <dd className="flex items-center gap-2">
+                  <select
+                    value={selectedRole || member.role}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    disabled={isUpdatingRole}
+                    className="h-8 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#714B67] focus:border-[#714B67]"
+                    aria-label="Assign System Role"
+                  >
+                    <option value="student">Student</option>
+                    <option value="eventOrganizer">Event Organizer</option>
+                    <option value="volunteer">Volunteer</option>
+                    <option value="treasurer">Treasurer</option>
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRoleUpdate}
+                    isLoading={isUpdatingRole}
+                    disabled={isUpdatingRole || !selectedRole || selectedRole === member.role}
+                    className="text-xs h-8 px-2.5"
+                  >
+                    Update
+                  </Button>
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs text-gray-500 font-medium">Account Status</dt>
               <dd className="mt-1">{getStatusBadge(member.status)}</dd>

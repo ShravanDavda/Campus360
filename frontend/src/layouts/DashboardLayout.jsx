@@ -64,35 +64,41 @@ export default function DashboardLayout() {
   }
 
   const userRole = getUserRole();
-  const navItems = userRole === 'admin'
-    ? [
-        { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-        { name: 'Admin Members', path: '/admin/members', icon: Users },
-        { name: 'Admin Events', path: '/admin/events', icon: Calendar },
-        { name: 'Admin Merchandise', path: '/admin/merchandise', icon: ShoppingBag },
-        { name: 'Admin Fundraisers', path: '/admin/fundraisers', icon: HeartHandshake },
-        { name: 'Admin Tasks', path: '/admin/tasks', icon: CheckSquare },
-        { name: 'Admin Volunteers', path: '/admin/volunteers', icon: UserCheck },
-        { name: 'Admin Finance', path: '/admin/finance', icon: Receipt },
-        { name: 'Admin Announcements', path: '/admin/announcements', icon: Megaphone },
-        ...MEMBER_NAV_ITEMS.filter((i) => i.path !== '/dashboard' && i.path !== '/events' && i.path !== '/merchandise' && i.path !== '/payments' && i.path !== '/announcements'),
-      ]
-    : userRole === 'eventOrganizer'
-    ? [
-        { name: 'Organizer Dashboard', path: '/organizer/dashboard', icon: LayoutDashboard },
-        ...MEMBER_NAV_ITEMS,
-      ]
-    : userRole === 'volunteer'
-    ? [
-        { name: 'Volunteer Dashboard', path: '/volunteer/dashboard', icon: LayoutDashboard },
-        ...MEMBER_NAV_ITEMS,
-      ]
-    : userRole === 'treasurer'
-    ? [
-        { name: 'Treasurer Dashboard', path: '/treasurer/dashboard', icon: LayoutDashboard },
-        ...MEMBER_NAV_ITEMS,
-      ]
-    : MEMBER_NAV_ITEMS;
+  let navItems = MEMBER_NAV_ITEMS;
+
+  if (userRole === 'admin') {
+    navItems = [
+      { name: 'Admin Panel', path: '/admin/dashboard', icon: LayoutDashboard },
+      { name: 'Admin Members', path: '/admin/members', icon: Users },
+      { name: 'Admin Events', path: '/admin/events', icon: Calendar },
+      { name: 'Admin Merchandise', path: '/admin/merchandise', icon: ShoppingBag },
+      { name: 'Admin Fundraisers', path: '/admin/fundraisers', icon: HeartHandshake },
+      { name: 'Admin Tasks', path: '/admin/tasks', icon: CheckSquare },
+      { name: 'Admin Volunteers', path: '/admin/volunteers', icon: UserCheck },
+      { name: 'Admin Finance', path: '/admin/finance', icon: Receipt },
+      { name: 'Admin Announcements', path: '/admin/announcements', icon: Megaphone },
+      { name: 'Profile', path: '/profile', icon: User },
+      { name: 'Announcements', path: '/announcements', icon: Megaphone },
+    ];
+  } else if (userRole === 'eventOrganizer') {
+    navItems = [
+      { name: 'Event Organizer Panel', path: '/organizer/dashboard', icon: LayoutDashboard },
+      { name: 'Profile', path: '/profile', icon: User },
+      { name: 'Announcements', path: '/announcements', icon: Megaphone },
+    ];
+  } else if (userRole === 'treasurer') {
+    navItems = [
+      { name: 'Treasurer Panel', path: '/treasurer/dashboard', icon: LayoutDashboard },
+      { name: 'Profile', path: '/profile', icon: User },
+      { name: 'Announcements', path: '/announcements', icon: Megaphone },
+    ];
+  } else if (userRole === 'volunteer') {
+    navItems = [
+      { name: 'Volunteer Panel', path: '/volunteer/dashboard', icon: LayoutDashboard },
+      { name: 'Profile', path: '/profile', icon: User },
+      { name: 'Announcements', path: '/announcements', icon: Megaphone },
+    ];
+  }
 
   React.useEffect(() => {
     const handlePageShow = () => {
@@ -163,11 +169,10 @@ export default function DashboardLayout() {
                   to={item.path}
                   className={({ isActive }) => {
                     const active = isActive || (item.path === '/admin/dashboard' && location.pathname === '/dashboard');
-                    return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${
-                      active
-                        ? 'bg-[#714B67] text-white shadow-sm'
-                        : 'text-gray-700 hover:bg-[#714B67]/10 hover:text-[#714B67]'
-                    }`;
+                    return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${active
+                      ? 'bg-[#714B67] text-white shadow-sm'
+                      : 'text-gray-700 hover:bg-[#714B67]/10 hover:text-[#714B67]'
+                      }`;
                   }}
                 >
                   <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -210,11 +215,10 @@ export default function DashboardLayout() {
                       onClick={() => setMobileMenuOpen(false)}
                       className={({ isActive }) => {
                         const active = isActive || (item.path === '/admin/dashboard' && location.pathname === '/dashboard');
-                        return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${
-                          active
-                            ? 'bg-[#714B67] text-white shadow-sm'
-                            : 'text-gray-700 hover:bg-[#714B67]/10 hover:text-[#714B67]'
-                        }`;
+                        return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded transition-colors ${active
+                          ? 'bg-[#714B67] text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-[#714B67]/10 hover:text-[#714B67]'
+                          }`;
                       }}
                     >
                       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

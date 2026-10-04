@@ -86,8 +86,7 @@ export default function AdminFundraisers() {
   const [tableError, setTableError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Search state management (Mode A: Live Search vs Mode B: Button Search)
-  const [searchMode, setSearchMode] = useState('live'); // 'live' | 'button'
+  // Search state management (Explicit Search Button / Enter only)
   const [searchInput, setSearchInput] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
 
@@ -148,19 +147,7 @@ export default function AdminFundraisers() {
     }
   }, [navigate]);
 
-  // Mode A: Live debounced search effect (350ms)
-  useEffect(() => {
-    if (searchMode !== 'live') return;
-
-    const timer = setTimeout(() => {
-      setSubmittedSearch(searchInput.trim());
-      setCurrentPage(1);
-    }, 350);
-
-    return () => clearTimeout(timer);
-  }, [searchInput, searchMode]);
-
-  // Mode B: Button search trigger
+  // Search button / Enter trigger
   const handleButtonSearch = (e) => {
     if (e) e.preventDefault();
     if (loading) return;
@@ -543,75 +530,42 @@ export default function AdminFundraisers() {
       {/* Search & Filter Toolbar */}
       <div className="bg-white border border-[#e2e5e9] rounded-lg p-4 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
-          {/* Search Bar with Mode Toggle */}
+          {/* Search Bar with Search Button */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl">
-            <form onSubmit={handleButtonSearch} className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder={
-                  searchMode === 'live'
-                    ? 'Search by title or description (live)...'
-                    : 'Search by title or description (press Enter)...'
-                }
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9 pr-8 h-10 w-full"
-                aria-label="Search fundraisers"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchInput('');
-                    setSubmittedSearch('');
-                    setCurrentPage(1);
-                  }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
-                  aria-label="Clear search text"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </form>
+            <form onSubmit={handleButtonSearch} className="flex-1 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by title or description..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="pl-9 pr-8 h-10 w-full"
+                  aria-label="Search fundraisers"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInput('');
+                      setSubmittedSearch('');
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                    aria-label="Clear search text"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
 
-            {searchMode === 'button' && (
               <Button
-                type="button"
-                onClick={handleButtonSearch}
+                type="submit"
                 className="bg-[#714B67] hover:bg-[#5a3b52] text-white shrink-0 h-10 px-4"
               >
                 Search
               </Button>
-            )}
-
-            {/* Search Mode Toggle */}
-            <div className="flex items-center gap-1 border border-[#e2e5e9] rounded p-1 bg-gray-50 self-start sm:self-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => setSearchMode('live')}
-                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                  searchMode === 'live'
-                    ? 'bg-[#714B67] text-white'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                title="Search triggers automatically after 350ms debounce"
-              >
-                Live
-              </button>
-              <button
-                type="button"
-                onClick={() => setSearchMode('button')}
-                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                  searchMode === 'button'
-                    ? 'bg-[#714B67] text-white'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                title="Search triggers only on Search button click or Enter"
-              >
-                Button
-              </button>
-            </div>
+            </form>
           </div>
 
           {/* Filters Row */}

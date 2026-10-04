@@ -31,6 +31,10 @@ const formatRole = (role) => {
       return 'Volunteer';
     case 'treasurer':
       return 'Treasurer';
+    case 'membershipOfficer':
+      return 'Membership Officer';
+    case 'student':
+      return 'Student';
     default:
       return role || '—';
   }
@@ -43,6 +47,9 @@ const getStatusBadge = (status) => {
   }
   if (norm === 'pending') {
     return <Badge variant="gold">Pending</Badge>;
+  }
+  if (norm === 'rejected') {
+    return <Badge variant="danger">Rejected</Badge>;
   }
   return <Badge variant="gray">{status || '—'}</Badge>;
 };
@@ -86,11 +93,91 @@ export default function AdminMembers() {
   const [activatingId, setActivatingId] = useState(null);
   const [bannerAlert, setBannerAlert] = useState(null); // { type: 'success' | 'error', message: '' }
 
+  // Reject Member Modal state
+  const [rejectModal, setRejectModal] = useState({
+    open: false,
+    member: null,
+    loading: false,
+    error: '',
+  });
+
   // Member Detail Modal state
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [memberDetail, setMemberDetail] = useState(null);
   const [detailError, setDetailError] = useState('');
+  const [modalRole, setModalRole] = useState('');
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+
+  // Tab & Membership Plans State (Admin Authoritative)
+  const [activeTab, setActiveTab] = useState('members'); // 'members' | 'plans'
+  const [plans, setPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState('');
+  const [editingPlan, setEditingPlan] = useState(null);
+  const [editPriceInput, setEditPriceInput] = useState('');
+  const [editActiveInput, setEditActiveInput] = useState(true);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [editPlanError, setEditPlanError] = useState('');
+
+  const fetchPlans = async () => {
+    setPlansLoading(true);
+    setPlansError('');
+    try {
+      const res = await adminService.getAdminMembershipPlans();
+      if (res.data?.success) {
+        setPlans(res.data.data.plans || []);
+      }
+    } catch (err) {
+      setPlansError(err.response?.data?.error?.message || 'Failed to load membership plans.');
+    } finally {
+      setPlansLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'plans') {
+      fetchPlans();
+    }
+  }, [activeTab]);
+
+  const openEditPlan = (plan) => {
+    setEditingPlan(plan);
+    setEditPriceInput(String(plan.price));
+    setEditActiveInput(Boolean(plan.isActive));
+    setEditPlanError('');
+  };
+
+  const handleSavePlan = async (e) => {
+    e.preventDefault();
+    const priceNum = Number(editPriceInput);
+    if (isNaN(priceNum) || priceNum < 0) {
+      setEditPlanError('Price must be a valid number greater than or equal to 0.');
+      return;
+    }
+    setSavingPlan(true);
+    setEditPlanError('');
+    try {
+      const res = await adminService.updateAdminMembershipPlan(editingPlan.id, {
+        price: priceNum,
+        isActive: editActiveInput,
+      });
+      if (res.data?.success) {
+        setPlans((prev) =>
+          prev.map((p) => (p.id === editingPlan.id ? res.data.data.plan : p))
+        );
+        setBannerAlert({
+          type: 'success',
+          message: `Plan "${editingPlan.name}" updated successfully to ₹${priceNum.toFixed(2)}.`,
+        });
+        setEditingPlan(null);
+      }
+    } catch (err) {
+      setEditPlanError(err.response?.data?.error?.message || 'Failed to update plan.');
+    } finally {
+      setSavingPlan(false);
+    }
+  };
 
   // Debounce search input
   useEffect(() => {
@@ -193,6 +280,7 @@ export default function AdminMembers() {
       const response = await adminService.getAdminMember(memberId);
       if (response.data?.success && response.data?.data) {
         setMemberDetail(response.data.data);
+        setModalRole(response.data.data.role);
       } else {
         setDetailError('Unable to retrieve member details.');
       }
@@ -215,6 +303,32 @@ export default function AdminMembers() {
     setSelectedMemberId(null);
     setMemberDetail(null);
     setDetailError('');
+    setModalRole('');
+  };
+
+  const handleRoleUpdateModal = async () => {
+    if (!memberDetail || !modalRole || modalRole === memberDetail.role || isUpdatingRole) return;
+    setIsUpdatingRole(true);
+    try {
+      const response = await adminService.updateAdminMemberRole(memberDetail.id, { role: modalRole });
+      if (response.data?.success) {
+        setMemberDetail((prev) => ({ ...prev, role: modalRole }));
+        setMembers((prev) =>
+          prev.map((m) => (m.id === memberDetail.id ? { ...m, role: modalRole } : m))
+        );
+        setBannerAlert({
+          type: 'success',
+          message: response.data.message || `Member role updated to ${formatRole(modalRole)}.`,
+        });
+      }
+    } catch (err) {
+      setBannerAlert({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to update member role.',
+      });
+    } finally {
+      setIsUpdatingRole(false);
+    }
   };
 
   // Close modal on ESC key
@@ -317,6 +431,63 @@ export default function AdminMembers() {
     }
   };
 
+  // Handle Reject Member Registration (PATCH /api/admin/members/:userId/status)
+  const handleConfirmReject = async () => {
+    if (!rejectModal.member || rejectModal.loading) return;
+
+    const targetUser = rejectModal.member;
+    setRejectModal((prev) => ({ ...prev, loading: true, error: '' }));
+
+    try {
+      const response = await adminService.updateAdminMemberStatus(targetUser.id, {
+        status: 'rejected',
+      });
+
+      if (response.data?.success) {
+        const successMsg = response.data.message || 'Member registration rejected.';
+        setBannerAlert({
+          type: 'success',
+          message: successMsg,
+        });
+
+        // Authoritatively update list state immediately
+        setMembers((prev) =>
+          prev.map((m) => (m.id === targetUser.id ? { ...m, status: 'rejected' } : m))
+        );
+
+        // Update detail modal state if currently open for this member
+        if (memberDetail && memberDetail.id === targetUser.id) {
+          setMemberDetail((prev) => ({
+            ...prev,
+            status: 'rejected',
+          }));
+        }
+
+        // Close modal
+        setRejectModal({ open: false, member: null, loading: false, error: '' });
+
+        // Refresh member list data in background
+        setRefreshKey((k) => k + 1);
+      } else {
+        setRejectModal((prev) => ({
+          ...prev,
+          loading: false,
+          error: 'Failed to reject member.',
+        }));
+      }
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to reject member registration.';
+      setRejectModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: errorMsg,
+      }));
+    }
+  };
+
   const hasActiveFilters = Boolean(
     searchInput.trim() || statusFilter !== 'all' || roleFilter !== 'all'
   );
@@ -384,6 +555,92 @@ export default function AdminMembers() {
         </Alert>
       )}
 
+      {/* Tabs */}
+      <div className="flex border-b border-[#e2e5e9] space-x-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab('members')}
+          className={`pb-3 text-sm font-semibold transition-colors flex items-center gap-2 border-b-2 ${
+            activeTab === 'members'
+              ? 'border-[#714B67] text-[#714B67]'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Members List</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('plans')}
+          className={`pb-3 text-sm font-semibold transition-colors flex items-center gap-2 border-b-2 ${
+            activeTab === 'plans'
+              ? 'border-[#714B67] text-[#714B67]'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Membership Plans & Pricing</span>
+        </button>
+      </div>
+
+      {/* TAB 2: MEMBERSHIP PLANS MANAGEMENT */}
+      {activeTab === 'plans' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-[#e2e5e9] rounded-lg p-6 shadow-sm">
+            <div className="border-b border-[#e2e5e9] pb-4 mb-6">
+              <h2 className="text-lg font-bold text-gray-900">Authoritative Membership Plans</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Admin controls authoritative membership-plan pricing and active status. Historical financial records preserve the actual price paid.
+              </p>
+            </div>
+
+            {plansLoading ? (
+              <LoadingSpinner message="Loading membership plans..." />
+            ) : plansError ? (
+              <Alert variant="error">{plansError}</Alert>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {plans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className="border border-[#e2e5e9] rounded-lg p-5 bg-[#F8F9FA] flex flex-col justify-between space-y-4"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-base text-gray-900">{plan.name}</h3>
+                        <Badge variant={plan.isActive ? 'teal' : 'secondary'}>
+                          {plan.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <div className="text-2xl font-bold text-[#714B67] mb-2">
+                        ₹{Number(plan.price).toFixed(2)}
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Term Duration: <strong>{plan.durationMonths} {plan.durationMonths === 1 ? 'calendar month' : 'calendar months'}</strong>
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-200">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => openEditPlan(plan)}
+                        className="w-full text-xs"
+                      >
+                        Edit Price & Status
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 1: MEMBERS LIST */}
+      {activeTab === 'members' && (
+        <div className="space-y-6">
       {/* Filter and Search Bar */}
       <div className="bg-white border border-[#e2e5e9] rounded-lg p-4 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
@@ -426,6 +683,7 @@ export default function AdminMembers() {
               <option value="all">All Statuses</option>
               <option value="active">Active</option>
               <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
 
@@ -441,6 +699,7 @@ export default function AdminMembers() {
               className="h-10 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-colors hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-[#714B67] focus:border-[#714B67]"
             >
               <option value="all">All Roles</option>
+              <option value="student">Student</option>
               <option value="admin">Admin</option>
               <option value="eventOrganizer">Event Organizer</option>
               <option value="volunteer">Volunteer</option>
@@ -556,19 +815,41 @@ export default function AdminMembers() {
                           </Button>
 
                           {isPending && (
-                            <Button
-                              type="button"
-                              variant="primary"
-                              size="sm"
-                              isLoading={isActivatingThis}
-                              disabled={isActivatingThis || activatingId !== null}
-                              onClick={() => handleActivateMember(member.id)}
-                              className="text-xs gap-1"
-                              aria-label={`Activate member account for ${member.fullName}`}
-                            >
-                              <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                              <span>Activate</span>
-                            </Button>
+                            <>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                isLoading={isActivatingThis}
+                                disabled={isActivatingThis || activatingId !== null || rejectModal.loading}
+                                onClick={() => handleActivateMember(member.id)}
+                                className="text-xs gap-1"
+                                aria-label={`Activate member account for ${member.fullName}`}
+                              >
+                                <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>Activate</span>
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isActivatingThis || activatingId !== null || rejectModal.loading}
+                                onClick={() =>
+                                  setRejectModal({
+                                    open: true,
+                                    member,
+                                    loading: false,
+                                    error: '',
+                                  })
+                                }
+                                className="text-xs gap-1 border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                aria-label={`Reject member registration for ${member.fullName}`}
+                              >
+                                <X className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>Reject</span>
+                              </Button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -630,6 +911,8 @@ export default function AdminMembers() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
         </div>
       )}
 
@@ -703,7 +986,36 @@ export default function AdminMembers() {
                       </div>
                       <div>
                         <span className="text-xs text-gray-500 block">System Role</span>
-                        <span className="font-semibold text-gray-900">{formatRole(memberDetail.role)}</span>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span className="font-semibold text-gray-900">{formatRole(memberDetail.role)}</span>
+                          {memberDetail.role !== 'admin' && (
+                            <div className="flex items-center gap-1.5 ml-auto">
+                              <select
+                                value={modalRole || memberDetail.role}
+                                onChange={(e) => setModalRole(e.target.value)}
+                                disabled={isUpdatingRole}
+                                className="h-7 text-xs rounded border border-gray-300 bg-white px-2 py-0.5 text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#714B67]"
+                                aria-label="Assign System Role"
+                              >
+                                <option value="student">Student</option>
+                                <option value="eventOrganizer">Event Organizer</option>
+                                <option value="volunteer">Volunteer</option>
+                                <option value="treasurer">Treasurer</option>
+                              </select>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRoleUpdateModal}
+                                isLoading={isUpdatingRole}
+                                disabled={isUpdatingRole || !modalRole || modalRole === memberDetail.role}
+                                className="h-7 px-2 text-xs"
+                              >
+                                Update
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="text-xs text-gray-500 block">Account Status</span>
@@ -827,6 +1139,156 @@ export default function AdminMembers() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* REJECT MEMBER CONFIRMATION MODAL */}
+      {rejectModal.open && rejectModal.member && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-none">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reject-member-modal-title"
+            className="bg-white rounded-lg border border-[#e2e5e9] shadow-xl w-full max-w-md p-6"
+          >
+            <h2 id="reject-member-modal-title" className="text-base font-bold text-gray-900 mb-2">
+              Reject Member Registration
+            </h2>
+            <p className="text-sm text-gray-600 mb-3">
+              Are you sure you want to reject this member registration?
+            </p>
+            <div className="p-3 bg-gray-50 rounded border border-[#e2e5e9] text-xs text-gray-700 mb-4 space-y-1">
+              <div><span className="font-semibold text-gray-900">Name:</span> {rejectModal.member.fullName}</div>
+              <div><span className="font-semibold text-gray-900">Email:</span> {rejectModal.member.email}</div>
+              <div><span className="font-semibold text-gray-900">Role:</span> {formatRole(rejectModal.member.role)}</div>
+            </div>
+
+            {rejectModal.error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-800 mb-4 flex items-center gap-2">
+                <span>{rejectModal.error}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={rejectModal.loading}
+                onClick={() =>
+                  setRejectModal({ open: false, member: null, loading: false, error: '' })
+                }
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={rejectModal.loading}
+                onClick={handleConfirmReject}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-4"
+              >
+                {rejectModal.loading ? 'Rejecting...' : 'Reject'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* EDIT MEMBERSHIP PLAN MODAL */}
+      {editingPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-plan-modal-title"
+            className="bg-white rounded-lg border border-[#e2e5e9] shadow-xl w-full max-w-md p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+              <h2 id="edit-plan-modal-title" className="text-base font-bold text-gray-900">
+                Edit Membership Plan: {editingPlan.name}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEditingPlan(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePlan} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Plan Term Duration
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={`${editingPlan.durationMonths} ${
+                    editingPlan.durationMonths === 1 ? 'calendar month' : 'calendar months'
+                  }`}
+                  className="w-full h-9 px-3 py-1.5 border border-gray-200 rounded text-xs bg-gray-100 text-gray-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Plan Price (₹)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={editPriceInput}
+                  onChange={(e) => setEditPriceInput(e.target.value)}
+                  placeholder="e.g. 100.00"
+                  className="w-full text-sm"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Authoritative price charged for new applications and renewals. Historical payments will not be modified.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="planIsActive"
+                  checked={editActiveInput}
+                  onChange={(e) => setEditActiveInput(e.target.checked)}
+                  className="h-4 w-4 text-[#714B67] rounded border-gray-300 focus:ring-[#714B67]"
+                />
+                <label htmlFor="planIsActive" className="text-xs font-medium text-gray-800">
+                  Plan is Active (available to students)
+                </label>
+              </div>
+
+              {editPlanError && (
+                <div className="p-2.5 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                  {editPlanError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingPlan(null)}
+                  disabled={savingPlan}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-[#714B67] hover:bg-[#5b3c53] text-white"
+                  isLoading={savingPlan}
+                  disabled={savingPlan}
+                >
+                  Save Plan
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

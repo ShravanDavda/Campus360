@@ -11,10 +11,15 @@ import {
   Calendar,
   AlertCircle,
   Loader2,
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { volunteerService } from '../services/api';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Alert } from '../components/ui/Alert';
 import { EmptyState } from '../components/ui/EmptyState';
 
@@ -95,8 +100,25 @@ export default function VolunteerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [successFeedback, setSuccessFeedback] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState(null);
+  const [doneConfirmModal, setDoneConfirmModal] = useState({
+    open: false,
+    task: null,
+    loading: false,
+    error: '',
+  });
+
+  // Task Search, Filter, and Pagination State
+  const [taskSearchInput, setTaskSearchInput] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
+  const [taskStatusFilter, setTaskStatusFilter] = useState('all');
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskPagination, setTaskPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+  const [taskList, setTaskList] = useState([]);
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [taskError, setTaskError] = useState('');
 
   const fetchDashboard = useCallback(async (isManual = false) => {
     if (isManual) {
@@ -135,35 +157,147 @@ export default function VolunteerDashboard() {
     }
   }, []);
 
+  const fetchTasks = useCallback(async (page = 1, search = '', status = 'all') => {
+    setTaskLoading(true);
+    setTaskError('');
+    try {
+      const res = await volunteerService.getTasks({
+        page,
+        limit: 10,
+        search,
+        status,
+      });
+      if (res.data?.success && res.data?.data) {
+        setTaskList(res.data.data.tasks || []);
+        if (res.data.data.pagination) {
+          setTaskPagination(res.data.data.pagination);
+        }
+      }
+    } catch (err) {
+      setTaskError(err.response?.data?.error?.message || 'Failed to load assigned tasks.');
+    } finally {
+      setTaskLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchDashboard(false);
-  }, [fetchDashboard]);
+    fetchTasks(1, '', 'all');
+  }, [fetchDashboard, fetchTasks]);
 
   const handleRefresh = () => {
     fetchDashboard(true);
+    fetchTasks(taskPage, taskSearch, taskStatusFilter);
+  };
+
+  const handleApplyTaskSearch = () => {
+    setTaskSearch(taskSearchInput);
+    setTaskPage(1);
+    fetchTasks(1, taskSearchInput, taskStatusFilter);
+  };
+
+  const handleTaskStatusFilterChange = (status) => {
+    setTaskStatusFilter(status);
+    setTaskPage(1);
+    fetchTasks(1, taskSearch, status);
+  };
+
+  const handleClearTaskSearch = () => {
+    setTaskSearchInput('');
+    setTaskSearch('');
+    setTaskStatusFilter('all');
+    setTaskPage(1);
+    fetchTasks(1, '', 'all');
+  };
+
+  const handleTaskPageChange = (newPage) => {
+    setTaskPage(newPage);
+    fetchTasks(newPage, taskSearch, taskStatusFilter);
   };
 
   // Task Status Update Handler (re-fetches authoritative dashboard on success)
-  const handleStatusChange = async (taskId, newStatus) => {
+  const handleStatusSelect = (taskOrId, targetStatus) => {
+    const taskId = typeof taskOrId === 'object' && taskOrId !== null ? taskOrId.id : taskOrId;
+    const task =
+      typeof taskOrId === 'object' && taskOrId !== null
+        ? taskOrId
+        : taskList.find((t) => t.id === taskId) ||
+          (dashboardData?.tasks || []).find((t) => t.id === taskId) ||
+          { id: taskId, title: 'Task' };
+
+    if (targetStatus === 'DONE') {
+      setDoneConfirmModal({
+        open: true,
+        task,
+        loading: false,
+        error: '',
+      });
+      return;
+    }
+    // Directly update for non-DONE transitions (e.g. TODO <-> IN_PROGRESS)
+    executeStatusChange(taskId, targetStatus);
+  };
+
+  const handleCancelDone = () => {
+    setDoneConfirmModal({ open: false, task: null, loading: false, error: '' });
+  };
+
+  const executeStatusChange = async (taskId, newStatus) => {
     const validStatuses = ['TODO', 'IN_PROGRESS', 'DONE'];
     if (!validStatuses.includes(newStatus)) return;
     if (updatingTaskId) return; // Prevent duplicate submissions
 
     setUpdatingTaskId(taskId);
     setActionError('');
+    setSuccessFeedback('');
 
     try {
       await volunteerService.updateTaskStatus(taskId, newStatus);
-      // Re-fetch authoritative dashboard data
+      // Immediately reflect status update in local state for instantaneous feedback
+      setTaskList((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      );
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          tasks: Array.isArray(prev.tasks)
+            ? prev.tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+            : prev.tasks,
+        };
+      });
+      // Re-fetch authoritative dashboard data from backend (summary KPI counts)
       await fetchDashboard(false);
+      // Re-fetch current tasks page to reflect updated status
+      await fetchTasks(taskPage, taskSearch, taskStatusFilter);
+      if (newStatus === 'DONE') {
+        setSuccessFeedback('Task marked as Done successfully.');
+      }
     } catch (err) {
       const msg =
         err.response?.data?.error?.message ||
         err.response?.data?.message ||
         'Failed to update task status. Please retry.';
       setActionError(msg);
+      throw err;
     } finally {
       setUpdatingTaskId(null);
+    }
+  };
+
+  const handleConfirmDone = async () => {
+    if (!doneConfirmModal.task || doneConfirmModal.loading) return;
+
+    setDoneConfirmModal((prev) => ({ ...prev, loading: true, error: '' }));
+    try {
+      await executeStatusChange(doneConfirmModal.task.id, 'DONE');
+      setDoneConfirmModal({ open: false, task: null, loading: false, error: '' });
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to mark task as done.';
+      setDoneConfirmModal((prev) => ({ ...prev, loading: false, error: msg }));
     }
   };
 
@@ -174,7 +308,10 @@ export default function VolunteerDashboard() {
     completedTasks: 0,
   };
 
-  const tasks = Array.isArray(dashboardData?.tasks) ? dashboardData.tasks : [];
+  // Display taskList if loaded; fallback to dashboardData tasks if initial
+  const displayedTasks = taskList.length > 0 || taskSearch || taskStatusFilter !== 'all'
+    ? taskList
+    : (Array.isArray(dashboardData?.tasks) ? dashboardData.tasks : []);
   const fundraisers = Array.isArray(dashboardData?.fundraisers) ? dashboardData.fundraisers : [];
 
   // Helper map for fundraiser names
@@ -233,6 +370,13 @@ export default function VolunteerDashboard() {
       {actionError && (
         <Alert variant="error" title="Task Update Error">
           {actionError}
+        </Alert>
+      )}
+
+      {/* Success Feedback Alert */}
+      {successFeedback && (
+        <Alert variant="success" title="Task Completed">
+          {successFeedback}
         </Alert>
       )}
 
@@ -386,7 +530,8 @@ export default function VolunteerDashboard() {
                     Assigned Tasks
                   </h2>
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-[#714B67]/10 text-[#714B67]">
-                    {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+                    {taskPagination.total !== undefined ? taskPagination.total : displayedTasks.length}{' '}
+                    {(taskPagination.total !== undefined ? taskPagination.total : displayedTasks.length) === 1 ? 'task' : 'tasks'}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
@@ -395,12 +540,88 @@ export default function VolunteerDashboard() {
               </div>
             </div>
 
-            {/* Empty Tasks State */}
-            {tasks.length === 0 ? (
+            {/* Server-Backed Search and Filters Bar */}
+            <div className="bg-white border border-[#e2e5e9] rounded-lg p-3 sm:p-4 shadow-sm">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleApplyTaskSearch();
+                }}
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+              >
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                  <Input
+                    type="text"
+                    value={taskSearchInput}
+                    onChange={(e) => setTaskSearchInput(e.target.value)}
+                    placeholder="Search task title or description..."
+                    className="pl-9 text-xs h-9"
+                    aria-label="Search task title or description"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={taskStatusFilter}
+                    onChange={(e) => handleTaskStatusFilterChange(e.target.value)}
+                    className="text-xs font-medium border border-[#e2e5e9] rounded px-3 py-2 bg-white text-gray-800 hover:border-[#714B67] focus:outline-none focus:ring-1 focus:ring-[#714B67] h-9"
+                    aria-label="Filter tasks by status"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="TODO">To Do</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="DONE">Done</option>
+                  </select>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    className="gap-1.5 shrink-0 bg-[#714B67] hover:bg-[#5d3d54] text-white h-9 px-4"
+                  >
+                    <Search className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Search</span>
+                  </Button>
+
+                  {(taskSearch || taskStatusFilter !== 'all' || taskSearchInput) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearTaskSearch}
+                      className="gap-1 shrink-0 text-gray-600 hover:text-gray-900 border-[#e2e5e9] h-9"
+                      title="Clear search and filters"
+                    >
+                      <X className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Clear</span>
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {taskError && (
+              <Alert variant="error" title="Error Loading Tasks">
+                {taskError}
+              </Alert>
+            )}
+
+            {/* Task Loading Skeleton / State */}
+            {taskLoading ? (
+              <div className="bg-white border border-[#e2e5e9] rounded-lg p-8 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin text-[#714B67]" aria-hidden="true" />
+                <span>Loading assigned tasks...</span>
+              </div>
+            ) : displayedTasks.length === 0 ? (
               <EmptyState
                 icon={CheckSquare}
-                title="No tasks assigned yet."
-                description="You currently have no volunteer tasks assigned to you."
+                title={taskSearch || taskStatusFilter !== 'all' ? "No assigned tasks found." : "No tasks assigned yet."}
+                description={
+                  taskSearch || taskStatusFilter !== 'all'
+                    ? "No tasks match your search and filter criteria. Try adjusting your query."
+                    : "You currently have no volunteer tasks assigned to you."
+                }
               />
             ) : (
               <>
@@ -418,7 +639,7 @@ export default function VolunteerDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#e2e5e9]">
-                        {tasks.map((task) => {
+                        {displayedTasks.map((task) => {
                           const isUpdating = updatingTaskId === task.id;
                           const fundraiserName = fundraiserNameMap[task.fundraiserId];
 
@@ -461,24 +682,31 @@ export default function VolunteerDashboard() {
                                 <Badge>{task.status}</Badge>
                               </td>
 
-                              {/* Status Update Control */}
+                              {/* Status Update Control: Read-only if DONE, otherwise editable */}
                               <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-2">
-                                  {isUpdating && (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#714B67]" aria-hidden="true" />
-                                  )}
-                                  <select
-                                    value={task.status}
-                                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                                    disabled={isUpdating || Boolean(updatingTaskId)}
-                                    className="text-xs font-semibold border border-[#e2e5e9] rounded px-2.5 py-1 bg-white text-gray-800 hover:border-[#714B67] focus:outline-none focus:ring-1 focus:ring-[#714B67] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    aria-label={`Change status for task ${task.title}`}
-                                  >
-                                    <option value="TODO">To Do</option>
-                                    <option value="IN_PROGRESS">In Progress</option>
-                                    <option value="DONE">Done</option>
-                                  </select>
-                                </div>
+                                {task.status === 'DONE' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#017E84]/10 text-[#017E84] text-xs font-semibold border border-[#017E84]/25">
+                                    <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                    Done
+                                  </span>
+                                ) : (
+                                  <div className="inline-flex items-center gap-2">
+                                    {isUpdating && (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#714B67]" aria-hidden="true" />
+                                    )}
+                                    <select
+                                      value={task.status}
+                                      onChange={(e) => handleStatusSelect(task.id, e.target.value)}
+                                      disabled={isUpdating || Boolean(updatingTaskId)}
+                                      className="text-xs font-semibold border border-[#e2e5e9] rounded px-2.5 py-1 bg-white text-gray-800 hover:border-[#714B67] focus:outline-none focus:ring-1 focus:ring-[#714B67] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                      aria-label={`Change status for task ${task.title}`}
+                                    >
+                                      <option value="TODO">To Do</option>
+                                      <option value="IN_PROGRESS">In Progress</option>
+                                      <option value="DONE">Done</option>
+                                    </select>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );
@@ -490,7 +718,7 @@ export default function VolunteerDashboard() {
 
                 {/* Mobile Cards View */}
                 <div className="sm:hidden space-y-3">
-                  {tasks.map((task) => {
+                  {displayedTasks.map((task) => {
                     const isUpdating = updatingTaskId === task.id;
                     const fundraiserName = fundraiserNameMap[task.fundraiserId];
 
@@ -524,30 +752,73 @@ export default function VolunteerDashboard() {
                           </p>
                         )}
 
-                        {/* Status Update Dropdown */}
+                        {/* Status Update Dropdown / Read-only state */}
                         <div className="pt-2 border-t border-[#e2e5e9] flex items-center justify-between">
-                          <span className="text-xs font-semibold text-gray-700">Update Status:</span>
-                          <div className="flex items-center gap-2">
-                            {isUpdating && (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#714B67]" aria-hidden="true" />
-                            )}
-                            <select
-                              value={task.status}
-                              onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                              disabled={isUpdating || Boolean(updatingTaskId)}
-                              className="text-xs font-semibold border border-[#e2e5e9] rounded px-2 py-1 bg-white text-gray-800 hover:border-[#714B67] focus:outline-none focus:ring-1 focus:ring-[#714B67] disabled:opacity-50"
-                              aria-label={`Change status for task ${task.title}`}
-                            >
-                              <option value="TODO">To Do</option>
-                              <option value="IN_PROGRESS">In Progress</option>
-                              <option value="DONE">Done</option>
-                            </select>
-                          </div>
+                          <span className="text-xs font-semibold text-gray-700">
+                            {task.status === 'DONE' ? 'Status:' : 'Update Status:'}
+                          </span>
+                          {task.status === 'DONE' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#017E84]/10 text-[#017E84] text-xs font-semibold border border-[#017E84]/25">
+                              <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              Done
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              {isUpdating && (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#714B67]" aria-hidden="true" />
+                              )}
+                              <select
+                                value={task.status}
+                                onChange={(e) => handleStatusSelect(task.id, e.target.value)}
+                                disabled={isUpdating || Boolean(updatingTaskId)}
+                                className="text-xs font-semibold border border-[#e2e5e9] rounded px-2 py-1 bg-white text-gray-800 hover:border-[#714B67] focus:outline-none focus:ring-1 focus:ring-[#714B67] disabled:opacity-50"
+                                aria-label={`Change status for task ${task.title}`}
+                              >
+                                <option value="TODO">To Do</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="DONE">Done</option>
+                              </select>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Server-Side Pagination Controls */}
+                {taskPagination.totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#e2e5e9] pt-4 px-1">
+                    <span className="text-xs text-gray-500">
+                      Showing page <span className="font-semibold text-gray-800">{taskPagination.page}</span> of{' '}
+                      <span className="font-semibold text-gray-800">{taskPagination.totalPages}</span> ({taskPagination.total} total tasks)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={taskPagination.page <= 1 || taskLoading}
+                        onClick={() => handleTaskPageChange(taskPagination.page - 1)}
+                        className="text-xs gap-1 border-[#e2e5e9] text-gray-700"
+                        aria-label="Previous page of tasks"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> Previous
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={taskPagination.page >= taskPagination.totalPages || taskLoading}
+                        onClick={() => handleTaskPageChange(taskPagination.page + 1)}
+                        className="text-xs gap-1 border-[#e2e5e9] text-gray-700"
+                        aria-label="Next page of tasks"
+                      >
+                        Next <ChevronRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </section>
@@ -609,6 +880,63 @@ export default function VolunteerDashboard() {
             )}
           </section>
         </>
+      )}
+
+      {/* MARK TASK AS DONE CONFIRMATION MODAL */}
+      {doneConfirmModal.open && doneConfirmModal.task && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-none">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="done-modal-title"
+            className="bg-white rounded-lg border border-[#e2e5e9] shadow-xl w-full max-w-md p-6"
+          >
+            <h2 id="done-modal-title" className="text-base font-bold text-gray-900 mb-2">
+              Are you sure?
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to mark this task as Done? Once marked as Done, this task cannot be changed back.
+            </p>
+
+            {/* Task Info Context */}
+            <div className="p-3 bg-gray-50 rounded border border-[#e2e5e9] text-xs text-gray-700 mb-4 space-y-1">
+              <div>
+                <span className="font-semibold text-gray-900">Task:</span> {doneConfirmModal.task.title}
+              </div>
+              {doneConfirmModal.task.description && (
+                <div className="line-clamp-2">
+                  <span className="font-semibold text-gray-900">Description:</span> {doneConfirmModal.task.description}
+                </div>
+              )}
+            </div>
+
+            {doneConfirmModal.error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-800 mb-4 flex items-center gap-2">
+                <span>{doneConfirmModal.error}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={doneConfirmModal.loading}
+                onClick={handleCancelDone}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={doneConfirmModal.loading}
+                onClick={handleConfirmDone}
+                className="bg-[#017E84] hover:bg-[#017E84]/90 text-white text-xs font-semibold px-4"
+              >
+                {doneConfirmModal.loading ? 'Updating...' : 'OK'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

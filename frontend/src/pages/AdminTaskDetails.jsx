@@ -195,7 +195,8 @@ export default function AdminTaskDetails() {
     setUnassignError('');
 
     try {
-      await adminService.removeAdminTaskAssignment(taskId, unassignTarget.id);
+      const targetAssignmentId = unassignTarget.assignmentId || unassignTarget.id;
+      await adminService.removeAdminTaskAssignment(taskId, targetAssignmentId);
       showToast('Assignment removed successfully.', 'success');
       setUnassignTarget(null);
       fetchTaskDetails();
@@ -544,11 +545,11 @@ export default function AdminTaskDetails() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {task.assignedVolunteers.map((vol) => {
               const volunteerId = vol.volunteerId || vol.id;
-              const assignmentId = vol.id;
+              const assignmentId = vol.assignmentId || vol.id;
 
               return (
                 <div
-                  key={volunteerId || assignmentId}
+                  key={assignmentId || volunteerId}
                   className="p-4 rounded-lg border border-[#e2e5e9] bg-gray-50/40 flex items-start justify-between gap-3 hover:border-gray-300 transition-colors"
                 >
                   <div className="space-y-1">

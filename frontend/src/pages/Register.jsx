@@ -7,25 +7,17 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 
-// Publicly registrable roles allowed by the locked API contract
-// NOTE: admin, student, and member are not public registration roles
-const ALLOWED_ROLES = [
-  { value: 'eventOrganizer', label: 'Event Organizer' },
-  { value: 'volunteer', label: 'Volunteer' },
-  { value: 'treasurer', label: 'Treasurer' },
-];
-
 export default function Register() {
   const navigate = useNavigate();
 
-  // Form state - exactly matching locked contract
+  // Form state - student registration
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
     phoneNumber: '',
-    role: '',
+    role: 'student',
   });
 
   // UI state
@@ -105,11 +97,12 @@ export default function Register() {
       errors.phoneNumber = 'Phone number must contain exactly 10 digits.';
     }
 
-    // 6. Role: required, one of the three approved public roles
+    // 6. Role: required, one of student, eventOrganizer, volunteer, treasurer
+    const allowedRoles = ['student', 'eventOrganizer', 'volunteer', 'treasurer'];
     if (!formData.role) {
-      errors.role = 'Please select a role.';
-    } else if (!ALLOWED_ROLES.some((r) => r.value === formData.role)) {
-      errors.role = 'Selected role is invalid.';
+      errors.role = 'Role is required.';
+    } else if (!allowedRoles.includes(formData.role)) {
+      errors.role = 'Please select a valid role.';
     }
 
     return errors;
@@ -133,10 +126,6 @@ export default function Register() {
       return;
     }
 
-    // Construct EXACT five-field payload according to the new locked contract:
-    // fullName, email, password, phoneNumber, role
-    // NOTE: confirmPassword, phone, status are NEVER included
-    // NOTE: email is NOT lowercased, preserved exactly as received
     const payload = {
       fullName: formData.fullName.trim(),
       email: formData.email.trim(),
@@ -418,7 +407,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* 6. Role Select */}
+            {/* 6. Role Selector */}
             <div>
               <Label htmlFor="role" required>
                 Role
@@ -429,20 +418,15 @@ export default function Register() {
                 value={formData.role}
                 onChange={handleChange}
                 disabled={isSubmitting || isSuccess}
+                className="w-full h-10 px-3 py-2 border rounded-md text-sm text-gray-900 bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#714B67] focus:border-[#714B67] disabled:bg-gray-100 disabled:cursor-not-allowed"
+                aria-label="Select role"
                 aria-invalid={!!fieldErrors.role}
                 aria-describedby={fieldErrors.role ? "role-error" : undefined}
-                className={`flex h-10 w-full rounded border bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-1 focus:ring-[#714B67] focus:border-[#714B67] disabled:cursor-not-allowed disabled:bg-gray-100 ${
-                  fieldErrors.role
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                    : 'border-gray-300 hover:border-gray-400'
-                }`}
               >
-                <option value="">Select your role</option>
-                {ALLOWED_ROLES.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
+                <option value="student">Student</option>
+                <option value="eventOrganizer">Event Organizer</option>
+                <option value="volunteer">Volunteer</option>
+                <option value="treasurer">Treasurer</option>
               </select>
               {fieldErrors.role && (
                 <p id="role-error" className="mt-1 text-xs text-[#c0392b] font-medium">
@@ -451,7 +435,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* 7. Submit Button */}
+            {/* Submit Button */}
             <div className="pt-2">
               <Button
                 type="submit"

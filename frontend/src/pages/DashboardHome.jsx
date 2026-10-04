@@ -64,6 +64,10 @@ const formatRole = (role) => {
       return 'Volunteer';
     case 'treasurer':
       return 'Treasurer';
+    case 'membershipOfficer':
+      return 'Membership Officer';
+    case 'student':
+      return 'Student';
     default:
       return role || '';
   }
@@ -151,8 +155,23 @@ export default function DashboardHome() {
   const isExplicitAdminRoute = location.pathname === '/admin/dashboard';
   const shouldLoadAdmin = userRole === 'admin' || isExplicitAdminRoute;
 
-  // Load Common Member Dashboard
+  // Operational roles are redirected to their dedicated operational panels
   useEffect(() => {
+    if (userRole === 'eventOrganizer') {
+      navigate('/organizer/dashboard', { replace: true });
+    } else if (userRole === 'volunteer') {
+      navigate('/volunteer/dashboard', { replace: true });
+    } else if (userRole === 'treasurer') {
+      navigate('/treasurer/dashboard', { replace: true });
+    }
+  }, [userRole, navigate]);
+
+  // Load Common Member Dashboard (skip for operational roles)
+  useEffect(() => {
+    if (shouldLoadAdmin || ['eventOrganizer', 'volunteer', 'treasurer'].includes(userRole)) {
+      return;
+    }
+
     let isSubscribed = true;
 
     async function loadCommonDashboard() {
